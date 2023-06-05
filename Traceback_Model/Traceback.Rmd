@@ -72,7 +72,7 @@ $$\lambda_0(u) = e^{-3.912}Z(u) = 0.02 Z(u)$$
 # Shops Data
 
 ```{r}
-shops <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy Example\\Diffusion Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
+shops <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
 ppp_shops <- ppp(x=shops$x_coord, y=shops$y_coord, window = window, marks=as.factor(shops$Chain))
 ppp_shops <- rescale(ppp_shops, 1000, "km")
 ```

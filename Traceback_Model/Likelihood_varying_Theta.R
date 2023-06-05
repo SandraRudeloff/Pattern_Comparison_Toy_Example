@@ -2,7 +2,7 @@ library(spatstat)
 # Varying theta with the normal implementation 
 
 theta_1 <- 1
-theta_2 <- 1.15
+theta_2 <- 2
 # Example 1: Case with outbreak case close to one store
 outbreak_cases <- list(c(0,0), c(0.5,0.5))
 
