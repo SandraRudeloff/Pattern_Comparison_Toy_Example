@@ -1,0 +1,49 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(spatstat)
+library(reticulate)
+pd <- import("pandas")
+```
+
+```{r}
+scenario <- 1
+```
+
+```{r cars}
+population_data <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy Example\\Diffusion Model\\Outputs\\Population\\population_", as.character(scenario), ".pkl", sep=""))
+```
+```{r}
+population_data
+```
+
+```{r}
+window = owin(c(0,1000), c(0,1000))
+ppp_population <- ppp(x=population_data$x_centroid, y=population_data$y_centroid, window = window, marks= population_data$population)
+ppp_population <- rescale(ppp_population, 1000, "km")
+```
+```{r}
+smo_population <- density(ppp_population, eps = 0.1, positive = TRUE, weights= marks(ppp_population)) 
+```
+```{r}
+ppp_population
+```
+
+```{r}
+plot(smo_population, axes = TRUE)#, ribscale = 1/100)
+```
+
+
+```{r}
+summary(smo_population)
+```
+
+```{r}
+saveRDS(smo_population,paste("./Data/Population_Data/im_population_",as.character(scenario), ".rds", sep=""))
+```

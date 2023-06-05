@@ -1,0 +1,114 @@
+## Libraries
+
+```{r}
+library(spatstat)
+library(reticulate)
+library(RColorBrewer)
+use_python("/usr/bin/python3")
+pd <- import("pandas")
+```
+
+## Definition of input Data
+
+```{r}
+chains_to_investigate <- list("Chain 1" )
+```
+
+## Read Data
+
+### Window
+
+```{r}
+window = owin(c(0,1000), c(0,1000))
+```
+
+### Outbreak
+
+Outbreak made with Diffusion Model:
+
+```{r}
+# outbreak_data <- pd$read_pickle("./Data/Outbreaks/Toy_Outbreak_10.pkl")
+# ppp_outbreak <- ppp(x=outbreak_data$x_centroid, y=outbreak_data$y_centroid, window = window)
+```
+
+Outbreak artifically made to test model:
+
+```{r}
+ppp_outbreak <- ppp(x = c(750, 150, 50, 450, 50, 850, 850, 950, 50, 750), y = c(150, 250, 250, 450, 850, 150, 850, 150, 150, 850), window = window )
+ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
+```
+
+### Population Data
+
+```{r}
+im_population <- readRDS("./Data/Population Data/im_population.rds")
+im_population <- eval.im(im_population / 100)
+im_population <- eval.im(pmax(im_population, 1e-10))
+```
+
+## Quadrature Scheme
+
+```{r}
+Q <- quadscheme(ppp_outbreak, eps = 0.1)
+```
+
+## Null Model
+
+```{r}
+fit0 <- ppm(Q ~ offset(log(im_population)))
+print(fit0)
+```
+
+$$\lambda_0(u) = e^{-3.912}Z(u) = 0.02 Z(u)$$
+
+## Shops Data
+
+```{r}
+shops <- pd$read_pickle("./Data/Stores/stores.pkl")
+
+ppp_shops <- ppp(x=shops$x_coord, y=shops$y_coord, window = window, marks=as.factor(shops$Chain))
+ppp_shops <- rescale(ppp_shops, 1000, "km")
+```
+
+## Alternative Model
+
+```{r}
+for (chain in chains_to_investigate){
+  #for (chain in levels(ppp_shops$marks)){
+  print(chain)
+  # Alternative Model 
+  ppp_chosen <- subset(ppp_shops, marks == chain, drop = TRUE)
+  ppp_chosen <- unmark(ppp_chosen)
+  
+  # plot  
+    X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)),ppp_chosen,ppp_outbreak)
+  layerplotargs(X)[[1]] <- list(col=brewer.pal(n = 8, name = "Greys"), breaks = c(0, 1, 10, 50, 100, 150, 200, 250, 260))
+  layerplotargs(X)[[2]] <- list(pch = 18, cex = 0.8, col = "#386f9c")
+  layerplotargs(X)[[3]] <- list(pch = 18, cex = 1.5, col = "gold")
+  layerplotargs(X)[[4]] <- list(pch = 20, col = "red2", cex = 1.5)
+  plot(X, main = "Potential sources and cases", axes = TRUE,  xlim=c(0, 1), ylim=c(0, 1) )
+  
+  # ls_all_raisins = list()
+  # for (i in 1:ppp_chosen$n)  {
+  #   ls_all_raisins[i] =  paste0("log((1 +  abs(alpha) * (exp(-(abs(beta)) * ((x- ",ppp_chosen$x[i],")^2 + (y- ",ppp_chosen$y[i],")^2)))))")
+  # }
+  
+  ls_all_raisins = list()
+  for (i in 1:ppp_chosen$n){
+    ls_all_raisins[i] =  
+      paste0("1/(sqrt((x- ",ppp_chosen$x[i],")^2 + (y- ",ppp_chosen$y[i],")^2))")
+  }
+  
+  str_all_raisins <- paste(ls_all_raisins, collapse = "+")   
+  
+  eval(parse(text = paste('raisin_func <- function(x, y, alpha, beta){log(1 + exp(alpha - (abs(beta)) * (', ppp_chosen$n, '/(' , str_all_raisins , '))))}', sep='')))
+  
+  fit1 <- ippm(Q ~ offset(log(im_population) + raisin_func),
+               start = list(alpha = 1, beta = 5), nlm.args=list(stepmax=10), gcontrol = glm.control(maxit = 1000)) # nlm.args=list(stepmax=1, print.level=2)
+  print(paste("Alternative Model for ", chain))
+  print(fit1)
+  fit1$maxlogpl
+  print(paste("Anova for ", chain))
+  print(anova(fit0, fit1, test="LRT"))
+}
+```
