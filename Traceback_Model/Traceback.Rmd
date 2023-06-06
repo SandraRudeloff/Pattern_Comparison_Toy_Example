@@ -111,13 +111,8 @@ for (chain in chains_to_investigate) {
   str_all_raisins <- paste(ls_all_raisins, collapse = "+")     
   eval(parse(text = paste('raisin_func <- function(x, y, alpha, beta) {(' , str_all_raisins , ')}', sep = '')))
   
-  alpha_start <- 5
-  beta_start <- 1
-  
-  
   fit1 <- ippm(Q ~ offset(log(im_population) + raisin_func),
                start = list(alpha = 5, beta = 2), nlm.args = list(stepmax = 1), gcontrol = glm.control(maxit = 1000)) # nlm.args = list(stepmax = 1, print.level = 2)
-  print(paste("Starting values: alpha = ", alpha_start, " beta = ", beta_start))
   print(paste("Alternative Model for ", chain))
   print(fit1)
   print(paste("Anova for ", chain))
