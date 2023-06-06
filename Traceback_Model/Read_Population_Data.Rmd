@@ -16,9 +16,15 @@ pd <- import("pandas")
 scenario <- 1
 ```
 
+Private Computer:
 ```{r cars}
-population_data <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy Example\\Diffusion Model\\Outputs\\Population\\population_", as.character(scenario), ".pkl", sep=""))
+# population_data <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Population\\population_", as.character(scenario), ".pkl", sep = ""))
 ```
+Work Computer:
+```{r cars}
+population_data <- pd$read_pickle(paste("C:\\Users\\Sandra.Rudeloff\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Population\\population_", as.character(scenario), ".pkl", sep = ""))
+```
+
 ```{r}
 population_data
 ```
