@@ -7,6 +7,7 @@ from ipfn import ipfn
 from scipy.spatial import distance_matrix
 
 ##### Definition of input Data #####
+subfolder = "FSKx"
 no_of_cells = 100  # should be a number that gives a square (10x10)
 
 ## Shops Data ##
@@ -54,9 +55,11 @@ def import_population_data(no_of_cells, population_per_cell):
 
     df_population["population"] = population_per_cell
 
-    os.makedirs("Outputs/Population", exist_ok=True)
+    os.makedirs(os.path.join(subfolder, "Outputs", "Population"), exist_ok=True)
 
-    df_population.to_pickle(os.path.join("Outputs", "Population", "population.pkl"))
+    df_population.to_pickle(
+        os.path.join(subfolder, "Outputs", "Population", "population.pkl")
+    )
     return df_population
 
 
@@ -72,7 +75,7 @@ def import_shop_data(df_population):
         }
     )
     for ind in df_shops.index:
-        df_shops["Gitter_ID"][ind] = (
+        df_shops.loc[ind, "Gitter_ID"] = (
             df_population[
                 ((df_population["x_centroid"] - 50) <= df_shops.x_coord[ind])
                 & ((df_population["x_centroid"] + 50) >= df_shops.x_coord[ind])
@@ -81,8 +84,8 @@ def import_shop_data(df_population):
             ].index.values
         )[0]
 
-    os.makedirs("Outputs/Stores", exist_ok=True)
-    df_shops.to_pickle(os.path.join("Outputs", "Stores", "stores.pkl"))
+    os.makedirs(os.path.join(subfolder, "Outputs", "Stores"), exist_ok=True)
+    df_shops.to_pickle(os.path.join(subfolder, "Outputs", "Stores", "stores.pkl"))
 
     return df_shops
 
@@ -317,8 +320,8 @@ def main():
         empirical_mean_shopping_distance, tolerance, df_population, df_shops
     )
 
-    os.makedirs("Outputs/Flow", exist_ok=True)
-    flow.to_pickle(os.path.join("Outputs", "Flow", "flow.pkl"))
+    os.makedirs(os.path.join(subfolder, "Outputs", "Flow"), exist_ok=True)
+    flow.to_pickle(os.path.join(subfolder, "Outputs", "Flow", "flow.pkl"))
 
 
 if __name__ == "__main__":
