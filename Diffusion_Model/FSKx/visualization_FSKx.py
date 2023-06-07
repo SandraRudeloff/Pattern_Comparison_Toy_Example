@@ -58,9 +58,9 @@ gdf_population.plot(
     cmap="BuPu",
 )
 
+# TODO: When there is multiple outbreak cases in one cell, this is not visible (or in the same as a store?), maybe use a different marker for stores? also all not selected stores in different gray scales?
 gdf_outbreak.plot(ax=ax, marker="o", color="red", markersize=10, zorder=2)
 
-# TODO: When there is multiple outbreak cases in one cell, this is not visible (or in the same as a store?), maybe use a different marker for stores? also all not selected stores in different gray scales?
 gdf_stores[gdf_stores["Chain"] == chain_name].plot(
     ax=ax, marker="s", color="gold", markersize=10, zorder=3
 )

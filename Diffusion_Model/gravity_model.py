@@ -22,17 +22,15 @@ def get_distance_matrix(production, consumption):
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     # We need to make sure that the empirical mean shopping distance is in the same unit of measurement as the distances
-    arr_distance = arr_distance / 1000
+    arr_distance /= 1000
 
     return arr_distance
 
 
 def get_production_potential(shops_data):
-    production_potential = shops_data.groupby(["Gitter_ID"]).agg(
-        {"ID": "count", "Sales": "sum"}
-    )
-    production_potential = production_potential.rename(
-        columns={"ID": "Markets_Count", "Sales": "production_potential"}
+    production_potential = shops_data.groupby("Gitter_ID").agg(
+        Markets_Count=("ID", "count"),
+        production_potential=("Sales", "sum"),
     )
     return production_potential
 

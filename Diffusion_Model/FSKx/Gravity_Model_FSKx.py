@@ -44,22 +44,24 @@ def check_input_data():
 
 
 def import_population_data(no_of_cells, population_per_cell):
-    df_population = pd.DataFrame(columns=["population", "x_centroid", "y_centroid"])
     # set values
-    y_values = np.repeat(np.arange(50, 1000, 100), 10)
-    x_values = np.tile(np.arange(50, 1000, 100), 10)
-    df_population["y_centroid"] = y_values
-    df_population["x_centroid"] = x_values
-
+    y_values = np.repeat(np.arange(50, 1000, 100), math.sqrt(no_of_cells))
+    x_values = np.tile(np.arange(50, 1000, 100), math.sqrt(no_of_cells))
+    df_population = pd.DataFrame(
+        {
+            "population": population_per_cell,
+            "x_centroid": x_values,
+            "y_centroid": y_values,
+        }
+    )
     df_population.index.names = ["Gitter_ID"]
 
-    df_population["population"] = population_per_cell
+    output_dir = os.path.join(subfolder, "Outputs", "Population")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    df_population.to_pickle(os.path.join(output_dir, "population.pkl"))
 
-    os.makedirs(os.path.join(subfolder, "Outputs", "Population"), exist_ok=True)
-
-    df_population.to_pickle(
-        os.path.join(subfolder, "Outputs", "Population", "population.pkl")
-    )
+    df_population.to_pickle(os.path.join(output_dir, "population.pkl"))
     return df_population
 
 
@@ -84,8 +86,10 @@ def import_shop_data(df_population):
             ].index.values
         )[0]
 
-    os.makedirs(os.path.join(subfolder, "Outputs", "Stores"), exist_ok=True)
-    df_shops.to_pickle(os.path.join(subfolder, "Outputs", "Stores", "stores.pkl"))
+    output_dir = os.path.join(subfolder, "Outputs", "Stores")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    df_shops.to_pickle(os.path.join(output_dir, "stores.pkl"))
 
     return df_shops
 
@@ -112,11 +116,9 @@ def get_distance_matrix(production, consumption):
 
 
 def get_production_potential(shops_data):
-    production_potential = shops_data.groupby(["Gitter_ID"]).agg(
-        {"ID": "count", "Sales": "sum"}
-    )
-    production_potential = production_potential.rename(
-        columns={"ID": "Markets_Count", "Sales": "production_potential"}
+    production_potential = shops_data.groupby("Gitter_ID").agg(
+        Markets_Count=("ID", "count"),
+        production_potential=("Sales", "sum"),
     )
     return production_potential
 

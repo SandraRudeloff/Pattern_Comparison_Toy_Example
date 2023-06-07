@@ -25,7 +25,7 @@ no_of_trials_per_scenario = 1
 def get_xy(outbreak_scenario, scenario):
     df = pd.DataFrame({"Gitter_ID": outbreak_scenario})
     population_data = pd.read_pickle(
-        "Outputs/Population/population_" + str(scenario) + ".pkl"
+        os.path.join("Outputs", "Population", f"population_{scenario}.pkl")
     )
     df = df.merge(
         population_data[["x_centroid", "y_centroid"]],
@@ -38,17 +38,19 @@ def get_xy(outbreak_scenario, scenario):
 # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
 # random.seed(3)
 
-all_stores = pd.read_pickle("Outputs/Stores/stores_" + str(scenario) + ".pkl")
+
+all_stores = pd.read_pickle(
+    os.path.join("Outputs", "Stores", "stores_" + str(scenario) + ".pkl")
+)
+
 n_of_chains = all_stores["Chain"].nunique()
 # Number of stores per chain
 chains = all_stores.groupby(["Chain"])["Chain"].agg("count")
 
 for chain in chains.index:
     for no_of_outbreak_cases in list_outbreak_scenario_sizes:
-        print(chains[chain])
-
         for trial in range(0, no_of_trials_per_scenario):
-            outbreak_name = chain + "_" + str(no_of_outbreak_cases) + "_" + str(trial)
+            outbreak_name = f"{chain}_{no_of_outbreak_cases}_{trial}"
 
             outbreak_scenario_cells = generate_outbreak(
                 chain, no_of_outbreak_cases, all_stores, scenario
@@ -56,11 +58,11 @@ for chain in chains.index:
 
             outbreak_scenario = get_xy(outbreak_scenario_cells, scenario)
 
-            os.makedirs("Outputs/Outbreaks/Scenario_" + str(scenario), exist_ok=True)
+            output_dir = os.path.join("Outputs", "Outbreaks", f"Scenario_{scenario}")
+            os.makedirs(
+                output_dir,
+                exist_ok=True,
+            )
             outbreak_scenario.to_pickle(
-                "Outputs/Outbreaks/Scenario_"
-                + str(scenario)
-                + "/Outbreak_"
-                + outbreak_name
-                + ".pkl"
+                os.path.join(output_dir, f"Outbreak_{outbreak_name}.pkl")
             )

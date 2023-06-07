@@ -1,3 +1,4 @@
+import os
 import random
 
 import pandas as pd
@@ -7,8 +8,9 @@ from gravity_model import *
 
 def get_flow(sales_per_cell, selected_stores, scenario):
     # First we need to get all cells in which there are two stores:
-    flow = pd.read_pickle(r"Outputs\Flow\flow_" + str(scenario) + ".pkl")
-
+    flow = pd.read_pickle(
+        os.path.join("Outputs", "Flow", "flow_" + str(scenario) + ".pkl")
+    )
     # select all flows from cells where there is a store of the given chain inside
     selected_flow = flow[flow.index.isin(selected_stores.Gitter_ID)]
 
@@ -20,6 +22,7 @@ def get_flow(sales_per_cell, selected_stores, scenario):
     selected_flow = selected_flow.merge(
         only_multiple["production_potential"], on="Gitter_ID", how="left"
     )
+    selected_stores["Gitter_ID"] = selected_stores["Gitter_ID"].astype(int)
     selected_stores.set_index("Gitter_ID", inplace=True)
     selected_flow = selected_flow.merge(
         selected_stores["Sales"], on="Gitter_ID", how="left"
@@ -68,26 +71,9 @@ def get_cumulative_distribution(flow):
 
 def get_location_for_outbreak(cumulative_distribution):
     random_number = random.random()
-    for number in range(0, len(cumulative_distribution.index)):
-        if number == 0:
-            if 0 <= random_number < cumulative_distribution["cumulated"][number]:
-                return cumulative_distribution.iloc[[number]].index[0]
-            else:
-                pass
-        elif number == len(cumulative_distribution) - 1:
-            if cumulative_distribution["cumulated"][number - 1] <= random_number <= 1:
-                return cumulative_distribution.iloc[[number]].index[0]
-            else:
-                pass
-        else:
-            if (
-                cumulative_distribution["cumulated"][number - 1]
-                <= random_number
-                < cumulative_distribution["cumulated"][number]
-            ):
-                return cumulative_distribution.iloc[[number]].index[0]
-            else:
-                pass
+    return cumulative_distribution[
+        cumulative_distribution["cumulated"] > random_number
+    ].index[0]
 
 
 def generate_outbreak(chain_name, no_of_cases, all_stores, scenario):
@@ -100,6 +86,7 @@ def generate_outbreak(chain_name, no_of_cases, all_stores, scenario):
     cumulative_distribution = get_cumulative_distribution(flow)
 
     outbreak_scenario = []
-    for j in range(0, no_of_cases):
-        outbreak_scenario.append(get_location_for_outbreak(cumulative_distribution))
+    outbreak_scenario = [
+        get_location_for_outbreak(cumulative_distribution) for _ in range(no_of_cases)
+    ]
     return outbreak_scenario

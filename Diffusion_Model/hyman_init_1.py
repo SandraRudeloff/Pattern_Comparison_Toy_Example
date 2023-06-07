@@ -1,6 +1,7 @@
+import math
 import os
-from math import sqrt
 
+import numpy as np
 import pandas as pd
 
 from gravity_model import hyman_model
@@ -32,51 +33,42 @@ Sales = [1000, 1000, 1000, 1000, 1000]
 def check_input_data():
     # check whether all lists have the same length
     lists = [x_coord, y_coord, Chain, Sales]
-    it = iter(lists)
-    the_len = len(next(it))
-    if not all(len(l) == the_len for l in it):
+    if not all(len(l) == len(lists[0]) for l in lists):
         raise ValueError(
             "Not all lists that define the shops data have the same length"
         )
 
     # check whether the no_of_cells gives a perfect square
-    sq_root = int(sqrt(no_of_cells))
-    if (sq_root * sq_root) != no_of_cells:
+    if math.isqrt(no_of_cells) ** 2 != no_of_cells:
         raise ValueError("Number of cells doesn't give a perfect square")
 
 
 def import_population_data(no_of_cells, population_per_cell):
-    df_population = pd.DataFrame(columns=["population", "x_centroid", "y_centroid"])
     # set values
-    y = -50
-    x = 50
-    for i in range(0, no_of_cells):
-        if (i / 10).is_integer():
-            y = y + 100
-            x = 50
-        df_population.loc[i] = pd.Series(
-            {
-                "y_centroid": y,
-                "x_centroid": x,
-            }
-        )
-        x = x + 100
-
+    sqrt_cells = int(math.sqrt(no_of_cells))
+    y_values = np.repeat(np.arange(50, 1000, 100), sqrt_cells)
+    x_values = np.tile(np.arange(50, 1000, 100), sqrt_cells)
+    df_population = pd.DataFrame(
+        {
+            "population": population_per_cell,
+            "x_centroid": x_values,
+            "y_centroid": y_values,
+        }
+    )
     df_population.index.names = ["Gitter_ID"]
 
-    df_population["population"] = population_per_cell
+    output_dir = os.path.join("Outputs", "Population")
+    os.makedirs(output_dir, exist_ok=True)
 
-    os.makedirs("Outputs/Population", exist_ok=True)
-    df_population.to_pickle("Outputs/Population/population_" + str(scenario) + ".pkl")
+    df_population.to_pickle(os.path.join(output_dir, f"population_{scenario}.pkl"))
 
     return df_population
 
 
 def import_shop_data(df_population):
-    ID = list(range(1, len(x_coord) + 1))
     df_shops = pd.DataFrame(
         {
-            "ID": ID,
+            "ID": range(1, len(x_coord) + 1),
             "x_coord": x_coord,
             "y_coord": y_coord,
             "Chain": Chain,
@@ -85,7 +77,7 @@ def import_shop_data(df_population):
         }
     )
     for ind in df_shops.index:
-        df_shops["Gitter_ID"][ind] = (
+        df_shops.loc[ind, "Gitter_ID"] = (
             df_population[
                 ((df_population["x_centroid"] - 50) <= df_shops.x_coord[ind])
                 & ((df_population["x_centroid"] + 50) >= df_shops.x_coord[ind])
@@ -94,8 +86,11 @@ def import_shop_data(df_population):
             ].index.values
         )[0]
 
-    os.makedirs("Outputs/Stores", exist_ok=True)
-    df_shops.to_pickle("Outputs/Stores/stores_" + str(scenario) + ".pkl")
+    output_dir = os.path.join("Outputs", "Stores")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    df_shops.to_pickle(os.path.join(output_dir, f"stores_{scenario}.pkl"))
 
     return df_shops
 
