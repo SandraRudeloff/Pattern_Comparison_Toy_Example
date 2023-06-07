@@ -28,23 +28,63 @@ population_per_cell = 5
 empirical_mean_shopping_distance = 0.4  # all units are in km
 tolerance = 0.001
 
-scenario = 5
-
 
 def check_input_data():
     # check whether all lists have the same length
     lists = [x_coord, y_coord, Chain, Sales]
-    it = iter(lists)
-    the_len = len(next(it))
-    if not all(len(l) == the_len for l in it):
+    if not all(len(l) == len(lists[0]) for l in lists):
         raise ValueError(
             "Not all lists that define the shops data have the same length"
         )
 
     # check whether the no_of_cells gives a perfect square
-    sq_root = int(math.sqrt(no_of_cells))
-    if (sq_root * sq_root) != no_of_cells:
+    if math.isqrt(no_of_cells) ** 2 != no_of_cells:
         raise ValueError("Number of cells doesn't give a perfect square")
+
+
+def import_population_data(no_of_cells, population_per_cell):
+    df_population = pd.DataFrame(columns=["population", "x_centroid", "y_centroid"])
+    # set values
+    y_values = np.repeat(np.arange(50, 1000, 100), 10)
+    x_values = np.tile(np.arange(50, 1000, 100), 10)
+    df_population["y_centroid"] = y_values
+    df_population["x_centroid"] = x_values
+
+    df_population.index.names = ["Gitter_ID"]
+
+    df_population["population"] = population_per_cell
+
+    os.makedirs("Outputs/Population", exist_ok=True)
+
+    df_population.to_pickle(os.path.join("Outputs", "Population", "population.pkl"))
+    return df_population
+
+
+def import_shop_data(df_population):
+    df_shops = pd.DataFrame(
+        {
+            "ID": range(1, len(x_coord) + 1),
+            "x_coord": x_coord,
+            "y_coord": y_coord,
+            "Chain": Chain,
+            "Sales": Sales,
+            "Gitter_ID": "",
+        }
+    )
+    for ind in df_shops.index:
+        df_shops["Gitter_ID"][ind] = (
+            df_population[
+                ((df_population["x_centroid"] - 50) <= df_shops.x_coord[ind])
+                & ((df_population["x_centroid"] + 50) >= df_shops.x_coord[ind])
+                & ((df_population["y_centroid"] - 50) <= df_shops.y_coord[ind])
+                & ((df_population["y_centroid"] + 50) >= df_shops.y_coord[ind])
+            ].index.values
+        )[0]
+
+    os.makedirs("Outputs/Stores", exist_ok=True)
+    df_shops.to_pickle(os.path.join("Outputs", "Stores", "stores.pkl"))
+
+    return df_shops
 
 
 def get_distance_matrix(production, consumption):
@@ -63,7 +103,7 @@ def get_distance_matrix(production, consumption):
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     # We need to make sure that the empirical mean shopping distance is in the same unit of measurement as the distances
-    arr_distance = arr_distance / 1000
+    arr_distance /= 1000
 
     return arr_distance
 
@@ -269,68 +309,17 @@ def hyman_model(
     return flow_end
 
 
-def import_population_data(no_of_cells, population_per_cell):
-    df_population = pd.DataFrame(columns=["population", "x_centroid", "y_centroid"])
-    # set values
-    y = -50
-    x = 50
-    for i in range(0, no_of_cells):
-        if (i / 10).is_integer():
-            y = y + 100
-            x = 50
-        df_population.loc[i] = pd.Series(
-            {
-                "y_centroid": y,
-                "x_centroid": x,
-            }
-        )
-        x = x + 100
-
-    df_population.index.names = ["Gitter_ID"]
-
-    df_population["population"] = population_per_cell
-
-    os.makedirs("Outputs/Population", exist_ok=True)
-    df_population.to_pickle("Outputs/Population/population_" + str(scenario) + ".pkl")
-
-    return df_population
-
-
-def import_shop_data(df_population):
-    ID = list(range(1, len(x_coord) + 1))
-    df_shops = pd.DataFrame(
-        {
-            "ID": ID,
-            "x_coord": x_coord,
-            "y_coord": y_coord,
-            "Chain": Chain,
-            "Sales": Sales,
-            "Gitter_ID": "",
-        }
+def main():
+    check_input_data()
+    df_population = import_population_data(no_of_cells, population_per_cell)
+    df_shops = import_shop_data(df_population)
+    flow = hyman_model(
+        empirical_mean_shopping_distance, tolerance, df_population, df_shops
     )
-    for ind in df_shops.index:
-        df_shops["Gitter_ID"][ind] = (
-            df_population[
-                ((df_population["x_centroid"] - 50) <= df_shops.x_coord[ind])
-                & ((df_population["x_centroid"] + 50) >= df_shops.x_coord[ind])
-                & ((df_population["y_centroid"] - 50) <= df_shops.y_coord[ind])
-                & ((df_population["y_centroid"] + 50) >= df_shops.y_coord[ind])
-            ].index.values
-        )[0]
 
-    os.makedirs("Outputs/Stores", exist_ok=True)
-    df_shops.to_pickle("Outputs/Stores/stores_" + str(scenario) + ".pkl")
-
-    return df_shops
+    os.makedirs("Outputs/Flow", exist_ok=True)
+    flow.to_pickle(os.path.join("Outputs", "Flow", "flow.pkl"))
 
 
-check_input_data()
-df_population = import_population_data(no_of_cells, population_per_cell)
-
-# Shops Data
-df_shops = import_shop_data(df_population)
-
-flow = hyman_model(empirical_mean_shopping_distance, tolerance, df_population, df_shops)
-
-os.makedirs("Outputs/Flow", exist_ok=True)
-flow.to_pickle("Outputs/Flow/flow_" + str(scenario) + ".pkl")
+if __name__ == "__main__":
+    main()
