@@ -1,10 +1,16 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 # Libraries
 
-```{r}
+```{r warning=TRUE}
 library(spatstat) 
 library(reticulate) 
 library(RColorBrewer) 
 pd <- import("pandas")
+library(readxl)
 ```
 
 # Definition of input Data
@@ -14,7 +20,7 @@ chains_to_investigate <- list("Chain 1" )
 ```
 
 ```{r}
-scenario <- 1
+investigation_scenario <- 2
 ```
 
 # Read Data
@@ -36,19 +42,52 @@ Outbreak made with Diffusion Model:
 ```
 
 Outbreak artificially made to test model:
+```{r}
+df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario == investigation_scenario)
+```
+
+
 
 ```{r}
-ppp_outbreak <- ppp(x = c(750, 150, 50, 450, 50, 850, 850, 950, 50, 750), y = c(150, 250, 250, 450, 850, 150, 850, 150, 150, 850), window = window ) 
+ppp_outbreak <- ppp(x = df_outbreak$case_x, y = df_outbreak$case_y, window = window ) 
 ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
 ```
 
 ## Population Data
 
+
 ```{r}
-im_population <- readRDS(paste("./Data/Population_Data/im_population_", as.character(scenario), ".rds", sep = ""))
+no_of_cells <- 100 
+population_per_cell <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_per_cell
+```
+
+
+```{r}
+# calculate number of cells per row
+cells_per_row <- sqrt(no_of_cells)
+
+# generate a sequence of coordinates for centroids
+centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
+
+# generate all combinations of these coordinates
+df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
+
+# assign population
+df_population$population <- rep(population_per_cell, nrow(df_population))
+```
+
+```{r}
+ppp_population <- ppp(x = df_population$x_centroid, y = df_population$y_centroid, window = window, marks = df_population$population)
+ppp_population <- rescale(ppp_population, 1000, "km")
+smo_population <- density(ppp_population, eps = 0.1, positive = TRUE, weights = marks(ppp_population)) 
+```
+
+```{r}
+im_population <- smo_population
 im_population <- eval.im(im_population / 100)
 im_population <- eval.im(pmax(im_population, 1e-10))
 ```
+
 
 ```{r}
 plot(im_population)
@@ -71,17 +110,21 @@ $$\lambda_0(u) = e^{-3.912}Z(u) = 0.02 Z(u)$$
 
 # Shops Data
 Private Computer
-```{r}
+```{r eval=FALSE}
 shops <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
 ```
 Work Computer
-```{r}
+```{r eval=FALSE}
 shops <- pd$read_pickle(paste("C:\\Users\\Sandra.Rudeloff\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
+```
+
+```{r}
+df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario == investigation_scenario)
 ```
 
 
 ```{r}
-ppp_shops <- ppp(x = shops$x_coord, y = shops$y_coord, window = window, marks = as.factor(shops$Chain))
+ppp_shops <- ppp(x = df_shops$store_x, y = df_shops$store_y, window = window, marks = as.factor(df_shops$chain))
 ppp_shops <- rescale(ppp_shops, 1000, "km")
 ```
 
@@ -112,10 +155,12 @@ for (chain in chains_to_investigate) {
   eval(parse(text = paste('raisin_func <- function(x, y, alpha, beta) {(' , str_all_raisins , ')}', sep = '')))
   
   fit1 <- ippm(Q ~ offset(log(im_population) + raisin_func),
-               start = list(alpha = 5, beta = 2), nlm.args = list(stepmax = 1), gcontrol = glm.control(maxit = 1000)) # nlm.args = list(stepmax = 1, print.level = 2)
+               start = list(alpha = 5, beta = 15), nlm.args = list(stepmax = 1), gcontrol = glm.control(maxit = 1000)) # nlm.args = list(stepmax = 1, print.level = 2)
   print(paste("Alternative Model for ", chain))
   print(fit1)
   print(paste("Anova for ", chain))
   print(anova(fit0, fit1, test = "LRT"))
 }
 ```
+
+
