@@ -1,3 +1,4 @@
+options(reticulate.USE_CACHE = FALSE)
 library(spatstat) 
 library(reticulate) 
 library(RColorBrewer) 
@@ -6,8 +7,10 @@ library(readxl)
 
 # Definition of input Data
 chains_to_investigate <- list("Chain 1" )
-investigation_scenario <- 3
+investigation_scenario <- 4
 
+
+set.seed(123)
 # Read Data
 window <- owin(c(0,1000), c(0,1000))
 
@@ -24,7 +27,6 @@ ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
 
 ## Population Data
 no_of_cells <- 100 
-population_per_cell <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_per_cell
 
 # calculate number of cells per row
 cells_per_row <- sqrt(no_of_cells)
@@ -35,8 +37,16 @@ centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
 # generate all combinations of these coordinates
 df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
 
+population_type <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_type
+
 # assign population
-df_population$population <- rep(population_per_cell, nrow(df_population))
+if (population_type == "uniform") {
+  population_per_cell <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_per_cell
+  df_population$population <- rep(population_per_cell, nrow(df_population))
+} else if (population_type == "random") {
+  # random distribution between 1 and 100 
+  df_population$population <- sample(1:100, nrow(df_population), replace = TRUE)
+}
 
 ppp_population <- ppp(x = df_population$x_centroid, y = df_population$y_centroid, window = window, marks = df_population$population)
 ppp_population <- rescale(ppp_population, 1000, "km")
@@ -47,6 +57,25 @@ im_population <- eval.im(im_population / 100)
 im_population <- eval.im(pmax(im_population, 1e-10))
 
 plot(im_population)
+
+
+
+# assign population
+df_population$population <- population_per_cell
+
+ppp_population <- ppp(x = df_population$x_centroid, y = df_population$y_centroid, window = window, marks = df_population$population)
+ppp_population <- rescale(ppp_population, 1000, "km")
+smo_population <- density(ppp_population, eps = 0.1, positive = TRUE, weights = marks(ppp_population)) 
+
+im_population <- smo_population
+im_population <- eval.im(im_population / 100)
+im_population <- eval.im(pmax(im_population, 1e-10))
+
+plot(im_population)
+
+
+
+
 
 
 ## Private Computer
@@ -110,14 +139,42 @@ calculate_anova <- function(fit0, fit1, chain) {
 
 
 plot_example <- function(ppp_chosen) {
-  X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
-  layerplotargs(X)[[1]] <- list(col = brewer.pal(n = 8, name = "Greys"), breaks = c(0, 1, 10, 50, 100, 150, 200, 250, 260))
+  # Get min and max of the image
+  min_val <- min(im_population)
+  max_val <- max(im_population)
+  
+  tolerance <- 1e-6  # Adjust the tolerance as needed
+  
+  # Check if the density is uniform
+  is_uniform <- abs(min_val - max_val) < tolerance
+  
+  # Check if the density is uniform
+  #is_uniform <- min_val == max_val
+  
+  # Define the number of breaks you want
+  n_breaks <- 8
+  
+  if (is_uniform) {
+    # If density is uniform, use a single color
+    X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
+    layerplotargs(X)[[1]] <- list(col = "grey")
+  } else {
+    # Create a sequence of breaks from min to max
+    # If density is variable, use a color palette
+    color_palette <- brewer.pal(n = n_breaks, name = "Blues")
+    breaks <- seq(from = min_val, to = max_val, length.out = n_breaks + 1)
+    
+    X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
+    layerplotargs(X)[[1]] <- list(col = color_palette, breaks = breaks)
+  }
+  
   layerplotargs(X)[[2]] <- list(pch = 18, cex = 0.8, col = "#386f9c")
   layerplotargs(X)[[3]] <- list(pch = 18, cex = 1.5, col = "gold")
   layerplotargs(X)[[4]] <- list(pch = 20, col = "red2", cex = 1.5)
+  
   return(X)
+  
 }
-
 
 for (chain in chains_to_investigate) {
   print(chain)
@@ -130,5 +187,3 @@ for (chain in chains_to_investigate) {
   fit1 <- fit_model(Q, im_population, fit0, chain)
   anova_result <- calculate_anova(fit0, fit1, chain)
 }
-
-gc()
