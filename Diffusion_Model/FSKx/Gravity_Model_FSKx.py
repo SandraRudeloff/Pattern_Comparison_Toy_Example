@@ -45,8 +45,9 @@ def check_input_data():
 
 def import_population_data(no_of_cells, population_per_cell):
     # set values
-    y_values = np.repeat(np.arange(50, 1000, 100), math.sqrt(no_of_cells))
-    x_values = np.tile(np.arange(50, 1000, 100), math.sqrt(no_of_cells))
+    sqrt_cells = int(math.sqrt(no_of_cells))
+    y_values = np.repeat(np.arange(50, 1000, 100), sqrt_cells)
+    x_values = np.tile(np.arange(50, 1000, 100), sqrt_cells)
     df_population = pd.DataFrame(
         {
             "population": population_per_cell,
