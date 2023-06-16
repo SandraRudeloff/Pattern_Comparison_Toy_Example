@@ -7,8 +7,13 @@ library(readxl)
 library(openxlsx)
 
 # Definition of input Data ----
-scenarios <- c(1,2,3,4)
-chains_to_investigate <- list("Chain 1")
+scenarios <- c(1, 2, 3, 4, 5, 6)
+
+# Define a vector of starting values for the parameters
+start_alpha_values <- c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
+start_beta_values <-  c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
+
+
 set.seed(123)
 for (investigation_scenario in scenarios) {
   # Read Data ----
@@ -39,15 +44,16 @@ for (investigation_scenario in scenarios) {
   # generate all combinations of these coordinates
   df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
-  population_type <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_type
+  population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)
+  population_type <- population_data$population_type
   
   # assign population
   if (population_type == "uniform") {
-    population_per_cell <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_per_cell
+    population_per_cell <- population_data$population_per_cell
     df_population$population <- rep(population_per_cell, nrow(df_population))
   } else if (population_type == "random") {
     # random distribution between 1 and 100
-    df_population$population <- sample(1:100, nrow(df_population), replace = TRUE)
+    df_population$population <- sample(population_data$min:population_data$max, nrow(df_population), replace = TRUE)
   }
   
   # kernel smooth population
@@ -70,6 +76,7 @@ for (investigation_scenario in scenarios) {
   
   ## Shops Data
   df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario == investigation_scenario)
+  chains_to_investigate <- as.list(unique(df_shops$chain))
   
   ppp_shops <- ppp(x = df_shops$store_x, y = df_shops$store_y, window = window, marks = as.factor(df_shops$chain))
   ppp_shops <- rescale(ppp_shops, 1000, "km")
@@ -114,29 +121,27 @@ for (investigation_scenario in scenarios) {
   
   
   plot_example <- function(ppp_chosen) {
+    X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
+    
     # Get min and max of the image
     min_val <- min(im_population)
     max_val <- max(im_population)
   
-    tolerance <- 1e-6 # Adjust the tolerance as needed
-  
     # Check if the density is uniform
-    is_uniform <- abs(min_val - max_val) < tolerance
-  
-    # Define the number of breaks
-    n_breaks <- 8
+    is_uniform <- abs(min_val - max_val) < 1e-6 # Adjust the tolerance as needed
   
     if (is_uniform) {
       # If density is uniform, use a single color
-      X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
       layerplotargs(X)[[1]] <- list(col = "grey")
     } else {
+      # Define the number of breaks
+      n_breaks <- 8
+      
       # Create a sequence of breaks from min to max
       # If density is variable, use a color palette
       color_palette <- brewer.pal(n = n_breaks, name = "Blues")
       breaks <- seq(from = min_val, to = max_val, length.out = n_breaks + 1)
   
-      X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
       layerplotargs(X)[[1]] <- list(col = color_palette, breaks = breaks)
     }
   
@@ -171,17 +176,31 @@ for (investigation_scenario in scenarios) {
           # Append the data frame to the all_results data frame
           all_results <- rbind(all_results, df)
         
-      }}}
-    # Write to an Excel file
+        }}}
+    best_combination <- all_results[which.min(all_results$Pr_Chi),]
+    if (is.na(best_combination$Deviance)) {
+      best_combination <- all_results[which.max(all_results$Deviance), ]
+    }
+    print(best_combination)
     
+    # Write to an Excel file
     filename <- sprintf("%s/results_scenario_%s.xlsx", scenario_folder, investigation_scenario)
-    openxlsx::write.xlsx(all_results, filename)
+    wb <- openxlsx::createWorkbook()
+    addWorksheet(wb, "All_Results")
+    writeData(wb, "All_Results", all_results)
+    
+    addWorksheet(wb, "Best_Combination")
+    writeData(wb, "Best_Combination", best_combination)
+
+    openxlsx::saveWorkbook(wb, filename, overwrite = TRUE)
+    
+    
+    # Write to an Excel file
+    # filename <- sprintf("%s/results_scenario_%s.xlsx", scenario_folder, investigation_scenario)
+    # openxlsx::write.xlsx(all_results, filename)
     
   }
   
-  # Define a vector of starting values for beta
-  start_beta_values <- c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
-  start_alpha_values <- c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
   # Initialize a list to store the results
   fit_results <- list()
   
@@ -208,9 +227,7 @@ for (investigation_scenario in scenarios) {
         
         # Save the results to the list
         chain_results[[paste0("start_beta_", start_beta)]][[paste0("start_alpha_", start_alpha)]] <- list(fit1 = fit1, anova_result = anova_result)
-  
       }
-  
     }
     # Store the results for this chain in the overall results list
     fit_results[[chain]] <- chain_results
