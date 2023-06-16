@@ -242,7 +242,7 @@ for (investigation_scenario in scenarios) {
   
   save_results_in_XLSX(chains_to_investigate, start_alpha_values, start_beta_values, fit_results, scenario_folder)
   
-  filename <- sprintf("%s/results_scenario_%s.rds", scenario_folder, investigation_scenario)
-  saveRDS(fit_results, filename)
+  # filename <- sprintf("%s/results_scenario_%s.rds", scenario_folder, investigation_scenario)
+  # saveRDS(fit_results, filename)
   gc()
 }
