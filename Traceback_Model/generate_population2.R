@@ -1,25 +1,4 @@
-no_of_cells <- 100
-total_population <- 5000
-population_type <- "main_and_small_clusters"
-desired_gradient <- 50 # high values mean a large spreading # used for all radial type populations
-
-# df_population init ----
-centroid_coords <- seq(50, by = 100, length.out = sqrt(no_of_cells)) # sqrt(no_of_cells): number of cells per row
-df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
-
-
-# Random ---- 
-if (population_type == "random") {
-
-  # Generate random proportions
-  proportions <- runif(nrow(df_population))
-  
-  # Scale the proportions so that they sum up to the total population
-  population <- total_population * proportions / sum(proportions)
-  
-  # Round down the population counts to the nearest integer
-  df_population$population <- floor(population)
-  
+assign_remaining_population <- function(total_population, df_population){
   # Calculate the remaining population
   remaining_population <- total_population - sum(df_population$population)
   
@@ -30,10 +9,25 @@ if (population_type == "random") {
   } else if (remaining_population < 0) {
     df_population$population[selected_cells] <- df_population$population[selected_cells] - 1
   }
+  return(df_population)
+}
+
+# Random ---- 
+generate_random_population <- function(df_population, total_population) {
+    proportions <- runif(nrow(df_population)) #generates random numbers following a uniform distribution
+    
+    # Scale the proportions so that they sum up to the total population
+    population <- total_population * proportions / sum(proportions)
+
+    df_population$population <- floor(population)
+    
+    df_population <- assign_remaining_population(df_population, total_population)
+
+    return(df_population)
 }
 
 # Radial ----
-if (population_type == "radial") {
+generate_radial_population <- function(df_population, total_population, desired_gradient) {
   # Randomly select a center cell
   center_cell <- sample(1:nrow(df_population), 1)
   center_x <- df_population$x_centroid[center_cell]
@@ -57,12 +51,11 @@ if (population_type == "radial") {
   
   # Assign the calculated population values to the data frame
   df_population$population <- population
-  
+  return(df_population)
 }
 
-# Radial same size Clusters ----
-if (population_type == "radial_clusters") {
-  num_clusters <- 5 # or calculate based on desired entropy
+# Radial Clusters ----
+generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
   
@@ -95,16 +88,12 @@ if (population_type == "radial_clusters") {
     population[selected_cells] <- population[selected_cells] - 1
   }
   
-  
-  # Assign the calculated population values to the data frame
   df_population$population <- population
+  return(df_population)
 }
 
-# Radial Main and small clusters ----
-if (population_type == "main_and_small_clusters") {
-  num_clusters <- 5 # or calculate based on desired entropy
-
-  
+# Radial main and small clusters ----
+generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
   
@@ -154,8 +143,27 @@ if (population_type == "main_and_small_clusters") {
   
   # Assign the calculated population values to the data frame
   df_population$population <- population
+  return(df_population)
 }
 
+# main script ----
+no_of_cells <- 100
+total_population <- 5000
+population_type <- "main_and_small_clusters"
+desired_gradient <- 50 # high values mean a large spreading # used for all radial type populations
+num_clusters <- 5 # or calculate based on desired entropy
+
+## df_population init ----
+centroid_coords <- seq(50, by = 100, length.out = sqrt(no_of_cells)) # sqrt(no_of_cells): number of cells per row
+df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
+
+# Use switch case to choose population type
+switch(population_type,
+       "random" = {df_population <- generate_random_population(df_population, total_population)},
+       "radial" = {df_population <- generate_radial_population(df_population, total_population, desired_gradient)},
+       "radial_clusters" = {df_population <- generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters = 5)},
+       "main_and_small_clusters" = {df_population <- generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters = 5)}
+)
   
 # Plotting ----
 library(ggplot2)
