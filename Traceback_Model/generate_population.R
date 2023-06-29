@@ -1,107 +1,135 @@
+assign_remaining_population <- function(df_population, total_population){
+  remaining_population <- total_population - sum(df_population$population)
+  
+  # Randomly assign the remaining population to some of the cells
+  selected_cells <- sample(nrow(df_population), abs(remaining_population), replace = TRUE)
+  df_population$population[selected_cells] <- df_population$population[selected_cells] + sign(remaining_population)
+  
+  return(df_population)
+}
+
+# Random ---- 
+generate_random_population <- function(df_population, total_population) {
+    proportions <- runif(nrow(df_population)) #generates random numbers following a uniform distribution
+    
+    # Scale the proportions so that they sum up to the total population
+    population <- total_population * proportions / sum(proportions)
+
+    df_population$population <- floor(population)
+    
+    df_population <- assign_remaining_population(df_population, total_population)
+
+    return(df_population)
+}
+
+
+# Radial Clusters ----
+# Radial cluster with num_cluster = 1 is the same as the old radial code
+generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
+  # Initialize the population distribution
+  population <- rep(0, no_of_cells)
+  
+  # For each cluster...
+  for (i in 1:num_clusters) {
+    # Randomly select a center cell
+    center_cell <- sample(1:nrow(df_population), 1)
+    center_x <- df_population$x_centroid[center_cell]
+    center_y <- df_population$y_centroid[center_cell]
+    
+    # Calculate the distances from each cell to the center cell
+    distances <- sqrt((df_population$x_centroid - center_x)^2 + (df_population$y_centroid - center_y)^2)
+    
+    # Calculate the raw population values (not yet scaled to the total population)
+    raw_population <- 1 / (1 + distances / desired_gradient) # 1 in denominator avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
+    
+    # Scale the raw population values so that they sum up to the cluster's population
+    cluster_population <- total_population / num_clusters # or vary between clusters
+    population <- population + round(cluster_population * raw_population / sum(raw_population))
+  }
+  
+  df_population$population <- population
+  df_population <- assign_remaining_population(df_population, total_population)
+
+  return(df_population)
+}
+
+# Radial main and small clusters ----
+generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
+  # Initialize the population distribution
+  population <- rep(0, no_of_cells)
+  
+  # Randomly select a center cell for the main cluster
+  main_cluster_cell <- sample(1:nrow(df_population), 1)
+  main_cluster_x <- df_population$x_centroid[main_cluster_cell]
+  main_cluster_y <- df_population$y_centroid[main_cluster_cell]
+  
+  # Calculate the distances from each cell to the main cluster
+  main_cluster_distances <- sqrt((df_population$x_centroid - main_cluster_x)^2 + (df_population$y_centroid - main_cluster_y)^2)
+  
+  # Calculate the raw population values for the main cluster (not yet scaled to the total population)
+  main_cluster_raw_population <- 1 / (1 + main_cluster_distances / desired_gradient) # 1 in denominator to avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
+  
+  # Scale the raw population values for the main cluster so that they sum up to the main cluster's population
+  main_cluster_population_percentage <- 0.6 - (num_clusters - 1) * 0.05
+  main_cluster_population <- (total_population * main_cluster_population_percentage) 
+  population <- population + round(main_cluster_population * main_cluster_raw_population / sum(main_cluster_raw_population))
+  
+  # For each small cluster...
+  for (i in 1:(num_clusters - 1)) {
+    # Randomly select a center cell for the small cluster
+    small_cluster_cell <- sample(1:nrow(df_population), 1)
+    small_cluster_x <- df_population$x_centroid[small_cluster_cell]
+    small_cluster_y <- df_population$y_centroid[small_cluster_cell]
+    
+    # Calculate the distances from each cell to the small cluster
+    small_cluster_distances <- sqrt((df_population$x_centroid - small_cluster_x)^2 + (df_population$y_centroid - small_cluster_y)^2)
+    
+    # Calculate the raw population values for the small cluster (not yet scaled to the total population)
+    small_cluster_raw_population <- 1 / (1 + small_cluster_distances / desired_gradient) # 1 in denominator to avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
+    
+    # Scale the raw population values for the small cluster so that they sum up to the small cluster's population
+    small_cluster_population <- (total_population * (1 - main_cluster_population_percentage)) / (num_clusters - 1) # or vary between clusters
+    population <- population + round(small_cluster_population * small_cluster_raw_population / sum(small_cluster_raw_population))
+  }
+  
+  df_population$population <- population
+  
+  df_population <- assign_remaining_population(df_population, total_population)
+  
+  return(df_population)
+}
+
+# main script ----
 no_of_cells <- 100
-no_of_entropy_steps <- 5
 total_population <- 5000
-method <- "radial"
+population_type <- "radial_clusters"
+desired_gradient <- 50 # high values mean a large spreading # used for all radial type populations
+num_clusters <- 5 # or calculate based on desired entropy
 
-# Define Entropy steps
-min_entropy <- 0 #very clustered
-max_entropy <- log(no_of_cells) #uniform
-desired_entropies = seq(min_entropy, max_entropy, length.out = 5)
-
-# generate a sequence of coordinates for centroids
+## df_population init ----
 centroid_coords <- seq(50, by = 100, length.out = sqrt(no_of_cells)) # sqrt(no_of_cells): number of cells per row
 df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
 
-# Function to generate a population distribution with a given entropy
-generate_population <- function(desired_entropy, total_population) {
-  # Initialize the population distribution
-  population <- rep(0, no_of_cells)
-  # Calculate the number of clusters based on the desired entropy
-  # For simplicity, we'll assume that each cluster has the same population
-  num_clusters <- round(exp(desired_entropy))
+# Use switch case to choose population type
+df_population <- switch(population_type,
+       "random" = generate_random_population(df_population = df_population, total_population = 5000),
+       "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters = 1),
+       "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters = 5)
+)
   
-  if (method == "radial") {
-    # Randomly select a center cell
-    center_cell <- sample(1:no_of_cells, 1)
-    # Assign the population to the cells in a radial pattern
-    for (i in 1:no_of_cells) {
-      distance <- abs(i - center_cell)
-      population[i] <- total_population / (1 + distance)
-    }
-  }
-  
-  else if (method == "main_and_small_clusters") {
-    # Randomly select a main cluster
-    main_cluster <- sample(1:no_of_cells, 1)
-    # Assign a large portion of the population to the main cluster
-    population[main_cluster] <- 0.8 * total_population
-    # Assign the remaining population to multiple smaller clusters
-    remaining_clusters <- num_clusters - 1
-    small_cluster_cells <- sample((1:no_of_cells)[-main_cluster], remaining_clusters)
-    population[small_cluster_cells] <- 0.2 * total_population / remaining_clusters
-  }
-  
-  
-  
-  
-  # this is worse than my random before because it is random everywhere the same and it is not random clusters
-  else if(method == "random") {
-    # Randomly select cells for the clusters
-    cluster_cells <- sample(1:no_of_cells, num_clusters)
-    # Assign the population to the clusters
-    population[cluster_cells] <- total_population / num_clusters
-    
-  }
-    
-  else if (method == "centered") {
-      # Assign one cluster to the center cell
-      center_cell <- no_of_cells %/% 2 + 1
-      population[center_cell] <- total_population / 2
-      # Assign the rest of the clusters to cells evenly spaced around the center
-      remaining_clusters <- num_clusters - 1
-      for (i in 1:remaining_clusters) {
-        cell <- (center_cell - 1 + no_of_cells * (i - 1) / remaining_clusters) %% no_of_cells + 1
-        population[cell] <- total_population / (2 * remaining_clusters)
-      }}
-  
-  else if (method == "lin_grad") {
-    # Assign the population to the clusters
-    # For simplicity, we'll assign the clusters to the first few cells
-    # In practice, you might want to assign the clusters to random cells or use some other method
-    population[1:num_clusters] <- total_population / num_clusters
-  }
-
-  
-  return(population)
-}
-
-population_distributions <- list()
-for (desired_entropy in desired_entropies) {
-  df_population$population <- generate_population(desired_entropy, total_population)
-  
-  # Check the entropy of the generated distribution
-  # entropy <- calculate_entropy(df_population$population)
-  
-  # Store the population distribution
-  population_distributions[[paste0("entropy_", desired_entropy)]] <- df_population
-}
-
+# Plotting ----
 library(ggplot2)
+library(plotly)
 
-# Function to plot a population distribution
-plot_population <- function(df_population, title) {
-  ggplot(df_population, aes(x = x_centroid, y = y_centroid, fill = population)) +
-    geom_tile(color = "gray") +
-    scale_fill_gradient(low = "white", high = "red") +
-    coord_equal() +
-    labs(title = title, x = "X Centroid", y = "Y Centroid", fill = "Population") +
-    theme_minimal()
-}
+p <- ggplot(df_population, aes(x = x_centroid, y = y_centroid, fill = population)) +
+  geom_tile(color = "gray") +
+  scale_fill_gradient(low = "white", high = "red") +
+  coord_equal() +
+  labs(title = "Population Distribution", x = "X Centroid", y = "Y Centroid", fill = "Population") +
+  theme_minimal()
 
-# Plot the population distributions
-for (i in seq_along(population_distributions)) {
-  print(plot_population(population_distributions[[i]], names(population_distributions)[i]))
-}
+# Convert the ggplot figure to a plotly figure
+p <- ggplotly(p)
 
-
-
+# Print the plot
+print(p)
