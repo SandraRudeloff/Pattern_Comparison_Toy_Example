@@ -5,9 +5,12 @@ library(RColorBrewer)
 pd <- import("pandas")
 library(readxl)
 library(openxlsx)
+source("generate_population.R")
+
 
 # Definition of input Data ----
 scenarios <- c(1, 2, 3, 4, 5, 6)
+
 
 # Define a vector of starting values for the parameters
 start_alpha_values <- c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
@@ -17,7 +20,13 @@ start_beta_values <-  c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 1
 set.seed(123)
 for (investigation_scenario in scenarios) {
   # Read Data ----
+  no_of_cells <- 100
   window <- owin(c(0, 1000), c(0, 1000))
+  total_population <- 5000
+  population_type <- "radial_clusters"
+  desired_gradient <- 50 # high values mean a large spreading # used for all radial type populations
+  num_clusters <- 5 
+  
   
   ## Outbreak Data ----
   ### Outbreak made with Diffusion Model ----
@@ -30,31 +39,32 @@ for (investigation_scenario in scenarios) {
   ppp_outbreak <- ppp(x = df_outbreak$case_x, y = df_outbreak$case_y, window = window)
   ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
   
-  
-  ## Population Data ----
-  
-  no_of_cells <- 100
-  
+  ### Population Data ----
   # calculate number of cells per row
   cells_per_row <- sqrt(no_of_cells)
   
-  # generate a sequence of coordinates for centroids
+  # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
   centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
-  
-  # generate all combinations of these coordinates
   df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
-  population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)
-  population_type <- population_data$population_type
+  # population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)
+  # population_type <- population_data$population_type
+  # 
+  # # assign population
+  # if (population_type == "uniform") {
+  #   population_per_cell <- population_data$population_per_cell
+  #   df_population$population <- rep(population_per_cell, nrow(df_population))
+  # } else if (population_type == "random") {
+  #   # random distribution between 1 and 100
+  #   df_population$population <- sample(population_data$min:population_data$max, nrow(df_population), replace = TRUE)
+  # }
   
-  # assign population
-  if (population_type == "uniform") {
-    population_per_cell <- population_data$population_per_cell
-    df_population$population <- rep(population_per_cell, nrow(df_population))
-  } else if (population_type == "random") {
-    # random distribution between 1 and 100
-    df_population$population <- sample(population_data$min:population_data$max, nrow(df_population), replace = TRUE)
-  }
+  # Use switch case to choose population type
+  df_population <- switch(population_type,
+                          "random" = generate_random_population(df_population = df_population, total_population = 5000),
+                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters = 1),
+                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters = 5)
+  )
   
   # kernel smooth population
   ppp_population <- ppp(x = df_population$x_centroid, y = df_population$y_centroid, window = window, marks = df_population$population)
