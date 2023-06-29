@@ -61,9 +61,10 @@ for (investigation_scenario in scenarios) {
   
   # Use switch case to choose population type
   df_population <- switch(population_type,
-                          "random" = generate_random_population(df_population = df_population, total_population = 5000),
-                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters = 1),
-                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters = 5)
+                          "random" = generate_random_population(df_population = df_population, total_population),
+                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
+                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters),
+                          "uniform" = generate_uniform_population(df_population, total_population)
   )
   
   # kernel smooth population
