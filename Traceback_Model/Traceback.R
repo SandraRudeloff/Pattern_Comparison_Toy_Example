@@ -7,64 +7,43 @@ library(readxl)
 library(openxlsx)
 source("generate_population.R")
 
-
 # Definition of input Data ----
-scenarios <- c(1, 2, 3, 4, 5, 6)
-
+scenarios <- c(1, 4)
 
 # Define a vector of starting values for the parameters
 start_alpha_values <- c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
 start_beta_values <-  c(1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200)
 
-
+scenarios_data_population <- read_excel("./Data/scenarios.xlsx", sheet = "Population")
 set.seed(123)
-for (investigation_scenario in scenarios) {
-  # Read Data ----
-  no_of_cells <- 100
-  window <- owin(c(0, 1000), c(0, 1000))
-  total_population <- 5000
-  population_type <- "radial_clusters"
-  desired_gradient <- 50 # high values mean a large spreading # used for all radial type populations
-  num_clusters <- 5 
-  
-  
-  ## Outbreak Data ----
-  ### Outbreak made with Diffusion Model ----
-  # outbreak_data <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Dev Kram\\Toy Example Traceback Model\\Diffusion Model\\Outputs\\Outbreaks\\Scenario_", as.character(scenario), "\\Outbreak_Chain 1_10_0.pkl", sep = ""))
-  # outbreak_data <- pd$read_pickle("./Data/Outbreaks/Toy_Outbreak_10.pkl")
-  # ppp_outbreak <- ppp(x=outbreak_data$x_centroid, y=outbreak_data$y_centroid, window = window)
-  
-  ### Outbreak artificially made to test model ----
-  df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario == investigation_scenario)
-  ppp_outbreak <- ppp(x = df_outbreak$case_x, y = df_outbreak$case_y, window = window)
-  ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
-  
-  ### Population Data ----
-  # calculate number of cells per row
+
+read_population_data <- function(investigation_scenario,no_of_cells ) {  
   cells_per_row <- sqrt(no_of_cells)
   
   # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
   centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
   df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
-  # population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)
-  # population_type <- population_data$population_type
-  # 
-  # # assign population
-  # if (population_type == "uniform") {
-  #   population_per_cell <- population_data$population_per_cell
-  #   df_population$population <- rep(population_per_cell, nrow(df_population))
-  # } else if (population_type == "random") {
-  #   # random distribution between 1 and 100
-  #   df_population$population <- sample(population_data$min:population_data$max, nrow(df_population), replace = TRUE)
-  # }
+  population_type <- subset(scenarios_data_population, scenario == investigation_scenario)$population_type
+  total_population <- subset(scenarios_data_population, scenario == investigation_scenario)$total_population
   
-  # Use switch case to choose population type
+  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" || population_type == "linear") {
+    # used for all radial type populations
+    desired_gradient <- subset(scenarios_data_population, scenario == investigation_scenario)$desired_gradient
+    # high values mean a large spreading 
+  }
+  
+  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" ) {
+    num_clusters <- subset(scenarios_data_population, scenario == investigation_scenario)$num_clusters
+  }
+  
+  # generate population
   df_population <- switch(population_type,
-                          "random" = generate_random_population(df_population = df_population, total_population),
+                          "random" = generate_random_population(df_population, total_population),
+                          "uniform" = generate_uniform_population(df_population, total_population),
+                          "linear" = generate_linear_population(df_population, total_population, desired_gradient),
                           "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
-                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters),
-                          "uniform" = generate_uniform_population(df_population, total_population)
+                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
   )
   
   # kernel smooth population
@@ -76,14 +55,21 @@ for (investigation_scenario in scenarios) {
   im_population <- eval.im(im_population / 100)
   im_population <- eval.im(pmax(im_population, 1e-10))
   
-  ## Shops Data ----
-  ### Private Computer ----
-  ## shops <- pd$read_pickle(paste("C:\\Users\\srude\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
+  return(im_population)
+}
+
+for (investigation_scenario in scenarios) {
+  no_of_cells <- 100
+  window <- owin(c(0, 1000), c(0, 1000))
   
+  ### Population Data ----
+  im_population <- read_population_data(investigation_scenario, no_of_cells)
   
-  ### Work Computer ----
-  ## shops <- pd$read_pickle(paste("C:\\Users\\Sandra.Rudeloff\\Documents\\Pattern Comparison Project\\Toy_Example\\Diffusion_Model\\Outputs\\Stores\\stores_", as.character(scenario), ".pkl", sep = ""))
-  
+  ## Outbreak Data ----
+  ### Outbreak artificially made to test model ----
+  df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario == investigation_scenario)
+  ppp_outbreak <- ppp(x = df_outbreak$case_x, y = df_outbreak$case_y, window = window)
+  ppp_outbreak <- rescale(ppp_outbreak, 1000, "km")
   
   ## Shops Data
   df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario == investigation_scenario)
@@ -94,7 +80,6 @@ for (investigation_scenario in scenarios) {
   
   # Quadrature Scheme ----
   Q <- quadscheme(ppp_outbreak, eps = 0.1)
-  
   
   # Null Model ----
   fit0 <- ppm(Q ~ offset(log(im_population)))
@@ -117,19 +102,16 @@ for (investigation_scenario in scenarios) {
     return(raisin_func)
   }
   
-  
-  fit_model <- function(Q, im_population, fit0, chain, start_alpha, start_beta) {
+  fit_alternative_model <- function(Q, im_population, fit0, chain, start_alpha, start_beta) {
     fit1 <- ippm(Q ~ offset(log(im_population) + raisin_func),
       start = list(alpha = start_alpha, beta = start_beta), nlm.args = list(stepmax = 1), gcontrol = glm.control(maxit = 1000)
     )
     return(fit1)
   }
   
-  
   calculate_anova <- function(fit0, fit1) {
     return(anova(fit0, fit1, test = "LRT"))
   }
-  
   
   plot_example <- function(ppp_chosen) {
     X <- layered(im_population, unmark(subset(ppp_shops, marks != chain, drop = TRUE)), ppp_chosen, ppp_outbreak)
@@ -156,7 +138,7 @@ for (investigation_scenario in scenarios) {
       layerplotargs(X)[[1]] <- list(col = color_palette, breaks = breaks)
     }
   
-    layerplotargs(X)[[2]] <- list(pch = 18, cex = 0.8, col = "#386f9c")
+    layerplotargs(X)[[2]] <- list(pch = 18, cex = 1.0, col = "#44a832")
     layerplotargs(X)[[3]] <- list(pch = 18, cex = 1.5, col = "gold")
     layerplotargs(X)[[4]] <- list(pch = 20, col = "red2", cex = 1.5)
   
@@ -229,7 +211,7 @@ for (investigation_scenario in scenarios) {
     for (start_beta in start_beta_values) {
       chain_results[[paste0("start_beta_", start_beta)]] <- list()
       for (start_alpha in start_alpha_values) {
-        fit1 <- fit_model(Q, im_population, fit0, chain, start_alpha, start_beta )
+        fit1 <- fit_alternative_model(Q, im_population, fit0, chain, start_alpha, start_beta )
         print(sprintf("Alternative Model for %s using start_alpha: %s and start_beta: %s", chain, start_alpha, start_beta))
         print(fit1)
         anova_result <- calculate_anova(fit0, fit1)
@@ -253,7 +235,5 @@ for (investigation_scenario in scenarios) {
   
   save_results_in_XLSX(chains_to_investigate, start_alpha_values, start_beta_values, fit_results, scenario_folder)
   
-  # filename <- sprintf("%s/results_scenario_%s.rds", scenario_folder, investigation_scenario)
-  # saveRDS(fit_results, filename)
   gc()
 }
