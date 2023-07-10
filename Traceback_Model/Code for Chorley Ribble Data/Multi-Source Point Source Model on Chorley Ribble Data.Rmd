@@ -1,0 +1,96 @@
+---
+title: "Two-Source Point Source Model on Chorley Ribble Data"
+geometry: "left=2cm,right=2cm,top=1cm,bottom=1cm"
+output:
+  pdf_document: 
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+Sys.setenv(lang = "en_US")
+```
+
+```{r}
+library(spatstat)
+```
+
+# Adding another source
+
+The first incinerator information is stored in `chorley.extra`. The incinerator is located at (x = 354.5, y = 413.6). We will add another one at different locations. We'll use the same windows as is used for the Chorley data.
+Example locations of the additional incinerator:
+- (x = 355, y = 414)
+- (x = 355.5, y = 414.5)
+- (x = 365, y = 415)
+- (x = 355, y = 428)
+
+```{r}
+sources <- ppp(c(354.5,355.5), c(413.6,414.5), window = chorley$window)
+```
+
+```{r}
+S <- split(chorley)
+larynx <- S$larynx # cases
+lung <- S$lung # controls
+```
+
+```{r}
+X <- layered(larynx, sources)
+layerplotargs(X)[[1]] <- list(pch = 4, cex = 0.5)
+layerplotargs(X)[[2]] <- list(pch = 20, col = "red")
+plot(X, main = "Potential source and larynx cancer cases")
+```
+
+```{r}
+smo <- density(lung, sigma = 0.15, eps = 0.1, positive = TRUE)
+smo <- eval.im(pmax(smo, 1e-10))
+```
+
+```{r}
+Q <- quadscheme(larynx, eps = 0.1)
+```
+
+# Fit Null Model
+```{r}
+chorley0fit <- ppm(Q ~ offset(log(smo)))
+```
+
+```{r}
+chorley0fit
+```
+
+# Fit Alternative Model
+
+```{r}
+ls_all_raisins = list()
+for (i in 1:sources$n)  {
+    ls_all_raisins[i] =  paste0("(1 + alpha * exp(-beta * ((x- ",sources$x[i],")^2 + (y- ",sources$y[i],")^2)))")
+}
+```
+
+```{r}
+str_all_raisins <- paste(ls_all_raisins, collapse = "*")
+```
+
+```{r}
+eval(parse(text = paste('raisin_func <- function(x, y, alpha, beta) {(' , str_all_raisins , ')}', sep='')))
+```
+
+```{r}
+chorleyDfit <- ippm(Q ~ offset(log(smo) + log(raisin_func)),
+  start = list(alpha = 5, beta = 1), gcontrol = glm.control(maxit = 1000))
+```
+
+```{r}
+chorleyDfit
+```
+
+# Compare the two models by the generalize likelihood ratio test
+```{r}
+anova(chorley0fit, chorleyDfit, test = "LRT")
+```
+
+
