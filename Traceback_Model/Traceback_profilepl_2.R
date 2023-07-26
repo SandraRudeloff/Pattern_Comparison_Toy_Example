@@ -90,37 +90,20 @@ for (investigation_scenario in scenarios) {
   
   
   # Alternative Model ----
-  # create_raisin_func <- function(x, y) {
-  #   # Construct raisin expressions
-  #   ls_all_raisins <- mapply(function(xi, yi) {
-  #     paste0("log((1 +  abs(alpha) * (exp(-(abs(beta)) * ((x- ", xi, ")^2 + (y- ", yi, ")^2)))))")
-  #   }, x, y, SIMPLIFY = FALSE)
-  #   
-  #   # Collapse into single string
-  #   str_all_raisins <- paste(ls_all_raisins, collapse = "+")
-  #   
-  #   # Create raisin function
-  #   eval(parse(text = paste("raisin_func <- function(x, y, alpha, beta) {(", str_all_raisins, ")}", sep = "")))
-  #   
-  #   return(raisin_func)
-  # }
-  
-  create_raisin_func <- function(x_coords, y_coords) {
+  create_raisin_func <- function(x, y) {
     # Construct raisin expressions
     ls_all_raisins <- mapply(function(xi, yi) {
       paste0("log((1 +  abs(alpha) * (exp(-(abs(beta)) * ((x- ", xi, ")^2 + (y- ", yi, ")^2)))))")
-    }, x_coords, y_coords, SIMPLIFY = FALSE)
-    
+    }, x, y, SIMPLIFY = FALSE)
+
     # Collapse into single string
     str_all_raisins <- paste(ls_all_raisins, collapse = "+")
-    
+
     # Create raisin function
-    eval(parse(text = paste("raisin_func <- function(alpha, beta) {(", str_all_raisins, ")}", sep = "")))
-    
+    eval(parse(text = paste("raisin_func <- function(x, y, alpha, beta) {(", str_all_raisins, ")}", sep = "")))
+
     return(raisin_func)
   }
-  
-  
   
   
   fit_alternative_model <- function(Q, im_population, fit0, chain) {
