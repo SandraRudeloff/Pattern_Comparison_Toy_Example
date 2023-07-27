@@ -92,18 +92,23 @@ print(fit0)
 
 
 # Alternative Model ----
-create_raisin_func <- function(x, y) {
-  # Construct raisin expressions
-  ls_all_raisins <- mapply(function(xi, yi) {
-    paste0("log((1 +  abs(alpha) * (exp(-(abs(beta)) * ((x- ", xi, ")^2 + (y- ", yi, ")^2)))))")
-  }, x, y, SIMPLIFY = FALSE)
+calculate_distances_single_case <- function(outbreak_case, df_shops) {
+  distances <- sqrt((df_shops$x - outbreak_case$x)^2 + (df_shops$y - outbreak_case$y)^2)
+  return(distances)
+}
 
+create_raisin_func <- function(distances) {
+  # Construct raisin expressions
+  ls_all_raisins <- lapply(distances, function(d) {
+    paste0("log((1 +  abs(alpha) * (exp(-(abs(beta)) * (", d, "^2)))))")
+  })
+  
   # Collapse into single string
   str_all_raisins <- paste(ls_all_raisins, collapse = "+")
-
+  
   # Create raisin function
-  eval(parse(text = paste("raisin_func <- function(x, y, alpha, beta) {(", str_all_raisins, ")}", sep = "")))
-
+  eval(parse(text = paste("raisin_func <- function(alpha, beta) {(", str_all_raisins, ")}", sep = "")))
+  
   return(raisin_func)
 }
 
@@ -111,8 +116,9 @@ create_raisin_func <- function(x, y) {
 fit_alternative_model <- function(Q, im_population, fit0, chain) {
   # fit1 <- ippm(Q ~ offset(log(im_population) + raisin_func),
   #              start = list(alpha = start_alpha, beta = start_beta), nlm.args = list(stepmax = 1), gcontrol = glm.control(maxit = 1000)
-  # )
-  fit1 <- profilepl(s, raisin_func, Q ~ offset(log(im_population)), aic = FALSE, rbord = NULL, verbose = TRUE, fast=TRUE)
+  # 
+
+  fit1 <- profilepl(s = s, f)
   return(fit1)
 }
 
@@ -158,7 +164,34 @@ for (chain in chains_to_investigate) {
   
   plot(plot_example(ppp_chosen), main = sprintf("Potential sources and cases for scenario %s", investigation_scenario), axes = TRUE, xlim = c(0, 1), ylim = c(0, 1))
   
-  raisin_func <- create_raisin_func(ppp_chosen$x, ppp_chosen$y)
+  # Create an empty dataframe to store the distances
+  df_distances_covariate <- data.frame()
+  
+  # Iterate over each row in the outbreak data
+  for (i in 1:nrow(df_outbreak)) {
+
+    # Calculate the distances to all stores
+    distances <- calculate_distances_single_case(ppp_outbreak[i], ppp_chosen)
+    
+    # Append the distances to the dataframe
+    df_distances_covariate <- rbind(df_distances_covariate, t(data.frame(distances)))
+  }
+  
+  # Set the column names of the distances dataframe to be the IDs of the shops
+  colnames(df_distances_covariate) <- paste0("shop_", 1:ncol(df_distances_covariate))
+
+  
+  model <- function(rho, theta1, theta2, df_distances_covariate) {
+    return(rho * apply(distances, 1, function(x) prod(1 + alpha * exp(-beta * x^2))))
+  }
+  
+  # Wrapper function for use with profilepl
+  f <- function(params) {
+    rho <- params[1]
+    theta1 <- params[2]
+    theta2 <- params[3]
+    return(model(rho, theta1, theta2, distances))
+  }
 
   fit1 <- fit_alternative_model(Q, im_population, fit0, chain)
   print(fit1)
