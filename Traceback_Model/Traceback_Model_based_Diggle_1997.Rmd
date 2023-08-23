@@ -55,7 +55,7 @@ source("generate_population.R")
 # Input Data
 
 ```{r}
-investigation_scenario <- 1
+investigation_scenario <- 2
 no_of_cells <- 100
 ```
 
@@ -149,15 +149,15 @@ if (range_population <= 10) {
 }
 
 # Generate the sequence of breaks
-breaks_population <- seq(min_population, max_population, by=step_size)
+breaks_population <- seq(min_population, max_population, by = step_size)
 ```
 
 Visualize
 ```{r}
 ggplot() +
   # Plot the population data
-  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width=100, height=100, alpha=0.8) +
-  scale_fill_gradient(low="white", high="cadetblue",name="Population", breaks=breaks_population) +
+  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width = 100, height = 100, alpha = 0.8) +
+  scale_fill_gradient(low = "white", high = "cadetblue",name = "Population", breaks = breaks_population) +
   
 
   # Introduce a new scale for the shop chains
@@ -223,14 +223,18 @@ likelihood_function <- function(params, y, N) {
   alpha <- params[1]
   beta <- params[2]
   rho <- params[3]
+  print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
   
   risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
   mu <- rho * N * apply(risk_matrix, 1, prod)
-  
+
   L <- sum(-mu + y * log(mu))
+  print(paste("likelihood: ", L))
+  
   return(-L) # We return the negative likelihood because optimizers in R typically minimize
 }
 
+# Construct Y
 # Define a function to check if a point is within a square centered at (x, y) with side length 2*delta
 point_in_square <- function(px, py, x, y, delta) {
   return(px >= (x - delta) & px <= (x + delta) & py >= (y - delta) & py <= (y + delta))
@@ -251,16 +255,22 @@ for (i in 1:nrow(df_population)) {
 N <- df_population$population
 
 # Initial parameter values
-initial_params <- c(alpha=1, beta=1, rho=1)
+initial_params <- c(alpha=100, beta=100, rho=1)
 
 # Optimization
-result <- optim(par=initial_params, fn=likelihood_function, y=y, N=N, method="SANN", hessian = TRUE)
+# Lower bounds for the parameters
+lower_bounds <- c(alpha=0, beta=0, rho=0.00000001)
+
+# Optimization with constraints
+result <- optim(par=initial_params, fn=likelihood_function, y=y, N=N, method="L-BFGS-B", lower=lower_bounds, hessian = TRUE)
 
 # Extract estimated parameters
 estimated_params <- result$par
 print(estimated_params)
+```
 
 
+```{r}
 lower_bounds <- c(alpha=0, beta=0, rho=0)
 upper_bounds <- c(alpha=1000, beta=1000, rho=10)  # You can adjust these bounds based on your domain knowledge.
 result <- DEoptim(fn=likelihood_function, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
@@ -304,9 +314,9 @@ df <- 2  # alpha and beta are the additional parameters in the alternative model
 p_value <- 1 - pchisq(GLRT_statistic, df)
 
 # Print the results
-cat("GLRT statistic:", GLRT_statistic, "\n")
-cat("Degrees of freedom:", df, "\n")
-cat("P-value:", p_value, "\n")
+print(paste("GLRT statistic:", GLRT_statistic, "\n"))
+print(paste("Degrees of freedom:", df, "\n"))
+print(paste("P-value:", p_value, "\n"))
 
 # Decide on the hypothesis based on a significance level (e.g., 0.05)
 if (p_value < 0.05) {
