@@ -431,12 +431,13 @@ upper_bounds <- c(rho=10)
 result_null_DEoptim <- DEoptim(fn=likelihood_function_null, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
 print(result_null_DEoptim)
 ```
+
 # Compare the nested Models
+
 ```{r}
 logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
 logLik_null_DEoptim <- -result_null_DEoptim$optim$bestval
 ```
-
 
 ```{r}
 GLRT_statistic <- 2 *(logLik_alternative_DEoptim - logLik_null_DEoptim)
@@ -459,6 +460,3 @@ if (p_value < 0.05) {
   cat("Fail to reject the null hypothesis.\n")
 }
 ```
-
-
-
