@@ -1,0 +1,464 @@
+---
+title: "Traceback_Model_based_Diggle_1997"
+author: "Sandra Rudeloff"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Derivation of the likelihood function
+
+Likelihood function:
+$$\mathcal{L}( \theta, \rho) = - \sum_{i=1}^p \mu_i + \sum_{i=1}^p y_i \log{\mu_i}$$
+
+-   $\theta$: risk parameters, in my case $\alpha$ and $\beta$
+-   $p$: number of subregions - in my case 100
+-   $y_i$: number of cases in each subregion
+-   $\mu_i$ expected number of cases in subregion $i$
+
+Expected Number of cases: $$\mu_i = \rho N_i \prod_{l=1}^{k} f_l(x_i)$$
+
+-   $\rho$: scale parameter
+-   $N_i$: number of people at risk in subregion $i$, in my case the
+    population
+-   $f_l(x_i)$: risk function associated with the $l^{th}$ source,
+    evaluated at the centroid $x_i$ of subregion $i$.
+
+risk function for distance $d$ from the source:
+$$f(d) = 1 + \alpha \exp[- (\frac{d}{\beta})^2]$$
+
+-   $\alpha$: proportional elevation in risk at the source
+-   $\beta$: decrease in risk
+
+Given this information, you can use the likelihood function to estimate
+the parameters $\alpha, \beta$ and $\rho$ for the model without
+covariates.
+
+# Libraries
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(ggnewscale)
+library(RColorBrewer)
+library(plotly)
+library(DEoptim)
+source("generate_population.R")
+```
+
+# Input Data
+
+```{r}
+investigation_scenario <- 5
+no_of_cells <- 100
+```
+
+# Collect Variables
+
+## Population Data
+
+number of people at risk in each subregion $N$
+
+```{r}
+read_population_data <- function(investigation_scenario,no_of_cells ) {  
+  cells_per_row <- sqrt(no_of_cells)
+  
+  # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
+  centroid_coords <- seq(0.05, by = 0.1, length.out = cells_per_row)
+  df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
+  
+  population_type <- subset(scenarios_data_population, scenario == investigation_scenario)$population_type
+  total_population <- subset(scenarios_data_population, scenario == investigation_scenario)$total_population
+  
+  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" || population_type == "linear") {
+    # used for all radial type populations
+    desired_gradient <- subset(scenarios_data_population, scenario == investigation_scenario)$desired_gradient
+    # high values mean a large spreading 
+  }
+  
+  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" ) {
+    num_clusters <- subset(scenarios_data_population, scenario == investigation_scenario)$num_clusters
+  }
+  
+  # generate population
+  df_population <- switch(population_type,
+                          "random" = generate_random_population(df_population, total_population),
+                          "uniform" = generate_uniform_population(df_population, total_population),
+                          "linear" = generate_linear_population(df_population, total_population, desired_gradient),
+                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
+                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
+  )
+  
+  return(df_population)
+}
+
+scenarios_data_population <- read_excel("./Data/scenarios.xlsx", sheet = "Population")
+
+df_population <- read_population_data(investigation_scenario, no_of_cells) 
+```
+
+## Outbreak Data
+
+```{r}
+df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario == investigation_scenario)[,2:3]
+df_outbreak$case_x <- df_outbreak$case_x / 1000
+df_outbreak$case_y <- df_outbreak$case_y / 1000
+```
+
+## Shops Data
+
+```{r}
+df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario == investigation_scenario)[,2:4]
+df_shops$store_x <- df_shops$store_x / 1000
+df_shops$store_y <- df_shops$store_y / 1000
+```
+
+## Visualization
+
+Assign colors to different chains
+
+```{r}
+# Identify unique chains and generate a color palette
+unique_chains <- unique(df_shops$chain)
+num_chains <- length(unique_chains)
+
+# Generate a color palette avoiding red and orange
+all_colors <- brewer.pal(9, "Set1")  # This palette has distinct colors
+all_colors <- all_colors[!all_colors %in% c("#E41A1C", "#377EB8")] 
+chain_colors <- all_colors[1:num_chains]
+
+# Create a named vector for chain colors
+names(chain_colors) <- unique_chains
+```
+
+Assign breaks for the legend of the population
+
+```{r}
+min_population <- min(df_population$population)
+max_population <- max(df_population$population)
+
+# Calculate the range of population values
+range_population <- max_population - min_population
+
+# Dynamically determine the step size based on the range
+if (range_population <= 10) {
+  step_size <- 2
+} else if (range_population <= 20) {
+  step_size <- 5
+} else if (range_population <= 50) {
+  step_size <- 10
+} else {
+  step_size <- 15
+}
+
+# Generate the sequence of breaks
+breaks_population <- seq(min_population, max_population, by = step_size)
+```
+
+Visualize
+
+```{r}
+ggplot() +
+  # Plot the population data
+  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width = 0.1, height = 0.1, alpha = 0.8) +
+  scale_fill_gradient(low = "white", high = "cadetblue",name = "Population", breaks = breaks_population) +
+  
+
+  # Introduce a new scale for the shop chains
+  new_scale_fill() +
+  
+  # Plot the shops data
+  geom_point(data=df_shops, aes(x=store_x, y=store_y, fill=chain), size=3, shape=23, alpha = 0.8) +
+  scale_fill_manual(values=chain_colors, name="Shop Chain") +
+  
+  # Plot the outbreak data
+  geom_point(data=df_outbreak, aes(x=case_x, y=case_y), color="red", size=2, shape=21, fill="red", alpha=0.8) +
+
+  # Adjust the x and y axis breaks to have lines every 100m
+  scale_x_continuous(breaks=seq(0, 1, by=0.1)) +
+  scale_y_continuous(breaks=seq(0, 1, by=0.1)) +
+  
+  # Add labels and theme
+  labs(title=sprintf("Visualization of Scenario %s", investigation_scenario),
+       x="X Coordinate",
+       y="Y Coordinate",
+       color="Shop Chain") +
+  theme_minimal() +
+  theme(legend.position="bottom", aspect.ratio=1,  panel.grid.minor = element_blank()) 
+```
+
+# Model
+
+## Construct Y
+
+Observed number of cases in each subregion
+
+```{r}
+# function to check if a point is within a square centered at (x, y) with side length 2*delta
+point_in_square <- function(px, py, x, y, delta) {
+  return(px >= (x - delta) & px <= (x + delta) & py >= (y - delta) & py <= (y + delta))
+}
+
+# Define half the side length of a square
+delta <- 0.05  
+
+y <- numeric(nrow(df_population))
+for (i in 1:nrow(df_population)) {
+  y[i] <- sum(point_in_square(df_outbreak$case_x, df_outbreak$case_y, df_population$x_centroid[i], df_population$y_centroid[i], delta))
+}
+```
+
+## Construct N
+
+Number of people at risk in each subregion
+
+```{r}
+N <- df_population$population
+```
+
+## Helper functions
+
+```{r}
+# Calculate the Risk Function for each Source and subregion
+# Compute distance between two points
+compute_distance <- function(x1, y1, x2, y2) {
+  return(sqrt((x1 - x2)^2 + (y1 - y2)^2))
+}
+
+# Risk function for distance d from the source
+risk_function <- function(d, alpha, beta) {
+  return(1 + alpha * exp(- (d/beta)^2))
+}
+```
+
+## Risk matrix
+
+```{r}
+compute_risk_matrix <- function(df_population, df_shops, alpha, beta) {
+  risk_matrix <- matrix(0, nrow(df_population), nrow(df_shops))
+  for (i in 1:nrow(df_population)) {
+    for (j in 1:nrow(df_shops)) {
+      d <- compute_distance(df_population$x_centroid[i], df_population$y_centroid[i], df_shops$store_x[j], df_shops$store_y[j])
+      risk_matrix[i, j] <- risk_function(d, alpha, beta)
+    }
+  }
+  return(risk_matrix)
+}
+```
+
+## Likelihood
+
+### Alternative
+
+```{r}
+likelihood_function <- function(params, y, N) {
+  alpha <- params[1]
+  beta <- params[2]
+  rho <- params[3]
+  #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
+  
+  if (alpha < 0 || beta < 0 || rho < 0.0001) {
+    return(1e6)
+  }
+
+  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
+  mu <- rho * N * apply(risk_matrix, 1, prod)
+
+  log_likelihood <- -sum(mu) + sum(y * log(mu)) # without y! because it does not do anything for the optimization
+  #print(paste("likelihood: ", log_likelihood))
+  
+  if (is.nan(log_likelihood)) {
+    return(1e6)
+  }
+  return(-log_likelihood) # We return the negative likelihood because optimizers in R typically minimize
+}
+```
+
+### Null
+
+Define likelihood function without alpha and beta
+
+```{r}
+likelihood_function_null <- function(params, y, N) {
+  rho <- params[1]
+  if (rho < 0.0001) {
+    return(1e6) 
+  }
+  
+  mu <- rho * N
+  
+  L <- -sum(mu) + sum(y * log(mu))
+  return(-L)
+}
+```
+
+## Optimize
+
+### Optim
+
+#### Alternative Model
+
+```{r}
+initial_params_alternative <- c(alpha = 0.5, beta = 0.5, rho = 0.5)
+
+# Lower bounds for the parameters
+lower_bounds_alternative <- c(alpha = 0, beta = 0, rho = 0.0001)
+
+result_alternative_BFGS <- optim(par = initial_params_alternative, fn = likelihood_function, y = y, N = N, method = "L-BFGS-B", lower = lower_bounds_alternative, hessian = TRUE)
+
+print(result_alternative_BFGS )
+```
+
+#### Null Model
+
+Optimize the null model
+
+```{r}
+initial_params_null <- c(rho = 0.5)
+# Lower bounds for the parameters
+lower_bounds_null <- c(rho = 0.0001)
+result_null_BFGS <- optim(par = initial_params_null, fn = likelihood_function_null, y = y, N = N, method = "L-BFGS-B", lower = lower_bounds_alternative, hessian = TRUE)
+print(result_null_BFGS)
+```
+
+#### Compare using GLRT
+
+```{r}
+logLik_alternative_BFGS <- -result_alternative_BFGS$value
+logLik_null_BFGS <- -result_null_BFGS$value
+```
+
+```{r}
+GLRT_statistic_BFGS <- 2 *(logLik_alternative_BFGS - logLik_null_BFGS)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value_BFGS <- 1 - pchisq(GLRT_statistic_BFGS, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic_BFGS, "\n"))
+print(paste("Degrees of freedom:", df, "\n"))
+print(paste("P-value:", p_value_BFGS, "\n"))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value_BFGS < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+### SANN
+
+#### Alternative Model
+
+```{r}
+initial_params_alternative <- c(alpha = 0.5, beta = 0.5, rho = 0.5)
+
+# Lower bounds for the parameters
+lower_bounds_alternative <- c(alpha = 0, beta = 0, rho = 0.0001)
+
+result_alternative_SANN <- optim(par = initial_params_alternative, fn = likelihood_function, y = y, N = N, method = "SANN", hessian = TRUE)
+
+print(result_alternative_SANN )
+```
+
+#### Null Model
+
+Optimize the null model
+
+```{r}
+initial_params_null <- c(rho = 0.5)
+
+result_null_SANN <- optim(par = initial_params_null, fn = likelihood_function_null, y = y, N = N, method = "SANN", hessian = TRUE)
+print(result_null_SANN)
+```
+
+#### Compare using GLRT
+
+```{r}
+logLik_alternative_SANN <- -result_alternative_SANN$value
+logLik_null_SANN <- -result_null_SANN$value
+```
+
+```{r}
+GLRT_statistic <- 2 *(logLik_alternative_SANN - logLik_null_SANN)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic, "\n"))
+print(paste("Degrees of freedom:", df, "\n"))
+print(paste("P-value:", p_value, "\n"))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+### Deoptim
+
+#### Alternative Model
+
+```{r}
+lower_bounds <- c(alpha=0, beta=0, rho=0.0001)
+upper_bounds <- c(alpha=1000, beta=1000, rho=10) 
+result_alternative_DEoptim <- DEoptim(fn=likelihood_function, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
+print(result_alternative_DEoptim)
+```
+
+#### Null Model
+
+```{r}
+lower_bounds <- c(rho=0.0001)
+upper_bounds <- c(rho=10) 
+result_null_DEoptim <- DEoptim(fn=likelihood_function_null, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
+print(result_null_DEoptim)
+```
+# Compare the nested Models
+```{r}
+logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
+logLik_null_DEoptim <- -result_null_DEoptim$optim$bestval
+```
+
+
+```{r}
+GLRT_statistic <- 2 *(logLik_alternative_DEoptim - logLik_null_DEoptim)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic))
+print(paste("Degrees of freedom:", df))
+print(paste("P-value:", p_value))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+
+
