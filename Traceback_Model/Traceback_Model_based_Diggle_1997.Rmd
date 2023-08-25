@@ -49,6 +49,7 @@ library(dplyr)
 library(ggnewscale)
 library(RColorBrewer)
 library(plotly)
+library(DEoptim)
 source("generate_population.R")
 ```
 
@@ -59,7 +60,7 @@ investigation_scenario <- 2
 no_of_cells <- 100
 ```
 
-# 1. Collect Variables
+# Collect Variables
 
 ## Population Data
 
@@ -70,7 +71,7 @@ read_population_data <- function(investigation_scenario,no_of_cells ) {
   cells_per_row <- sqrt(no_of_cells)
   
   # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
-  centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
+  centroid_coords <- seq(0.05, by = 0.1, length.out = cells_per_row)
   df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
   population_type <- subset(scenarios_data_population, scenario == investigation_scenario)$population_type
@@ -106,11 +107,15 @@ df_population <- read_population_data(investigation_scenario, no_of_cells)
 ## Outbreak Data
 ```{r}
 df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario == investigation_scenario)[,2:3]
+df_outbreak$case_x <- df_outbreak$case_x / 1000
+df_outbreak$case_y <- df_outbreak$case_y / 1000
 ```
 
 ## Shops Data
 ```{r}
 df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario == investigation_scenario)[,2:4]
+df_shops$store_x <- df_shops$store_x / 1000
+df_shops$store_y <- df_shops$store_y / 1000
 ```
 
 ## Visualization 
@@ -156,7 +161,7 @@ Visualize
 ```{r}
 ggplot() +
   # Plot the population data
-  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width = 100, height = 100, alpha = 0.8) +
+  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width = 0.1, height = 0.1, alpha = 0.8) +
   scale_fill_gradient(low = "white", high = "cadetblue",name = "Population", breaks = breaks_population) +
   
 
@@ -171,8 +176,8 @@ ggplot() +
   geom_point(data=df_outbreak, aes(x=case_x, y=case_y), color="red", size=2, shape=21, fill="red", alpha=0.8) +
 
   # Adjust the x and y axis breaks to have lines every 100m
-  scale_x_continuous(breaks=seq(0, 1000, by=100)) +
-  scale_y_continuous(breaks=seq(0, 1000, by=100)) +
+  scale_x_continuous(breaks=seq(0, 1, by=0.1)) +
+  scale_y_continuous(breaks=seq(0, 1, by=0.1)) +
   
   # Add labels and theme
   labs(title=sprintf("Visualization of Scenario %s", investigation_scenario),
@@ -186,19 +191,21 @@ ggplot() +
 
 
 
-# 2. Model
+# Model
+
+## Set up of the likelihood function 
 ```{r}
 # 2. Calculate the Risk Function for Each Source and Subregion ---- 
 # For each subregion centroid, compute the risk function for each store (source) based on the distance between the subregion centroid and the store.
 
-# Risk function for distance d from the source
-risk_function <- function(d, alpha, beta) {
-  return(1 + alpha * exp(- (d/beta)^2))
-}
-
 # Compute distance between two points
 compute_distance <- function(x1, y1, x2, y2) {
   return(sqrt((x1 - x2)^2 + (y1 - y2)^2))
+}
+
+# Risk function for distance d from the source shop
+risk_function <- function(d, alpha, beta) {
+  return(1 + alpha * exp(- (d/beta)^2))
 }
 
 # Compute the risk matrix for each subregion and source
@@ -212,28 +219,9 @@ compute_risk_matrix <- function(df_population, df_shops, alpha, beta) {
   }
   return(risk_matrix)
 }
+```
 
-# 3. Compute Expected Number of Cases ----
-#For each subregion, compute the expected number of cases (mu) using the risk functions and the population at risk in that subregion.
-
-# 4. Define the Likelihood Function ----
-# Using the expected number of cases and the observed number of cases, define the likelihood function.
-# Likelihood function
-likelihood_function <- function(params, y, N) {
-  alpha <- params[1]
-  beta <- params[2]
-  rho <- params[3]
-  print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
-  
-  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
-  mu <- rho * N * apply(risk_matrix, 1, prod)
-
-  L <- sum(-mu + y * log(mu))
-  print(paste("likelihood: ", L))
-  
-  return(-L) # We return the negative likelihood because optimizers in R typically minimize
-}
-
+```{r}
 # Construct Y
 # Define a function to check if a point is within a square centered at (x, y) with side length 2*delta
 point_in_square <- function(px, py, x, y, delta) {
@@ -241,7 +229,7 @@ point_in_square <- function(px, py, x, y, delta) {
 }
 
 # Define a delta (half the side length of the square)
-delta <- 50  # You can adjust this value based on your data's scale
+delta <- 0.05  # You can adjust this value based on your data's scale
 
 # Observed number of cases in each subregion
 y <- numeric(nrow(df_population))
@@ -253,46 +241,235 @@ for (i in 1:nrow(df_population)) {
 # Use an optimization algorithm to estimate the parameters (alpha, beta, and rho)
 # Number of people at risk in each subregion
 N <- df_population$population
-
-# Initial parameter values
-initial_params <- c(alpha=100, beta=100, rho=1)
-
-# Optimization
-# Lower bounds for the parameters
-lower_bounds <- c(alpha=0, beta=0, rho=0.00000001)
-
-# Optimization with constraints
-result <- optim(par=initial_params, fn=likelihood_function, y=y, N=N, method="L-BFGS-B", lower=lower_bounds, hessian = TRUE)
-
-# Extract estimated parameters
-estimated_params <- result$par
-print(estimated_params)
 ```
 
 
 ```{r}
-lower_bounds <- c(alpha=0, beta=0, rho=0)
-upper_bounds <- c(alpha=1000, beta=1000, rho=10)  # You can adjust these bounds based on your domain knowledge.
-result <- DEoptim(fn=likelihood_function, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
-estimated_params <- result$optim$bestmem
-print(estimated_params)
+# 4. Define the Likelihood Function ----
+# Using the expected number of cases and the observed number of cases, define the likelihood function.
+# Likelihood function
+likelihood_function <- function(params, y, N) {
+  alpha <- params[1]
+  beta <- params[2]
+  rho <- params[3]
+  #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
+  
+  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
+  mu <- rho * N * apply(risk_matrix, 1, prod)
+  # this is not a single value but a list of 100 mu values 
+
+  L <- -sum(mu) + sum(y * log(mu))
+  print(paste("likelihood: ", L))
+  
+    # Check for NaN and return a large value if NaN
+  if (is.nan(L)) {
+    return(-1e6)
+  }
+  
+  return(-L) # We return the negative likelihood because optimizers in R typically minimize
+}
+```
+--> Why is the likekihood negative????? --> it's the log-likleihood
+
+# using optim
+## alternative model
+```{r}
+# Initial parameter values
+initial_params_alternative <- c(alpha=1, beta=1, rho=1)
+
+# Optimization
+# Lower bounds for the parameters
+lower_bounds_alternative <- c(alpha=0, beta=0, rho=0.0001)
+
+# Optimization with constraints
+result_alternative <- optim(par=initial_params_alternative, fn=likelihood_function, y=y, N=N, method="L-BFGS-B", lower=lower_bounds_alternative, hessian = TRUE)
+
+# Extract estimated parameters
+print(result_alternative)
+```
+WHAT DOES THE MESSAGE MEAN?
 
 
-
+## Null model 
+```{r}
 # Fit the null model
 null_likelihood_function <- function(params, y, N) {
   rho <- params[1]
   mu <- rho * N
   
+  #print(paste("rho: ", rho))
+  
   L <- sum(-mu + y * log(mu))
+  #print(paste("likelihood: ", L))
+  
   return(-L)
 }
 
 # Optimize the null model
+# Initial parameter values for the null model
 initial_params_null <- c(rho=1)
-result_null <- optim(par=initial_params_null, fn=null_likelihood_function, y=y, N=N, method="SANN", hessian = TRUE)
-logLik_null <- -result_null$value
 
+# Lower bounds for the parameters of the null model
+lower_bounds_null <- c(rho=0.0001)
+
+# Optimization with constraints for the null model
+result_null <- optim(par=initial_params_null, fn=null_likelihood_function, y=y, N=N, method="L-BFGS-B", lower=lower_bounds_null, hessian = TRUE)
+print(result_null)
+```
+## Comparison 
+
+```{r}
+logLik_alternative <- result_alternative$value
+logLik_null <- result_null$value
+```
+shoudlnt the alternative likelihood always be higher, because otherwise lpha and beta could be zero otherwise 
+
+
+```{r}
+# Compute the GLRT statistic
+GLRT_statistic <- 2 * (logLik_alternative-logLik_null)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic, "\n"))
+print(paste("Degrees of freedom:", df, "\n"))
+print(paste("P-value:", p_value, "\n"))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+# using SANN
+## alternative model
+```{r}
+likelihood_function_with_constraints <- function(params, y, N) {
+  alpha <- params[1]
+  beta <- params[2]
+  rho <- params[3]
+  #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
+  
+  # Check constraints
+  if (alpha < 0 || beta < 0 || rho < 0.0001) {
+    return(1e6) # Return a large value if constraints are violated
+  }
+
+  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
+  mu <- rho * N * apply(risk_matrix, 1, prod)
+
+  L <- sum(-mu + y * log(mu))
+  # check whether the order of mu and y is the same
+  
+  #print(paste("likelihood: ", L))
+  
+    # Check for NaN and return a large value if NaN
+  if (is.nan(L)) {
+    return(1e6)
+  }
+  
+  return(-L) # We return the negative likelihood because optimizers in R typically minimize
+}
+
+```
+#TODO: Ich bin hier immernoch verwirrt mit dem negativ und positiv
+
+
+
+```{r}
+# Initial parameter values
+initial_params_alternative <- c(alpha=1, beta=1, rho=1)
+
+# Optimization using Simulated Annealing (SANN)
+result_alternative_SANN <- optim(par=initial_params_alternative, fn=likelihood_function_with_constraints, y=y, N=N, method="SANN")
+
+# Extract estimated parameters
+print(result_alternative_SANN)
+
+```
+Man kann hier vllt. auch noch die Anzahl an Wiederholungen verändern
+
+## Null model 
+
+
+```{r}
+# Fit the null model with constraints
+null_likelihood_function_with_constraints <- function(params, y, N) {
+  rho <- params[1]
+  mu <- rho * N
+  
+  # Check constraints
+  if (rho < 0.0001) {
+    return(1e6) # Return a large value if constraints are violated
+  }
+  
+  # Rest of the likelihood function code
+  L <- sum(-mu + y * log(mu))
+  return(-L)
+}
+
+# Initial parameter values for the null model
+initial_params_null <- c(rho=1)
+
+# Optimization using SANN for the null model
+result_null <- optim(par=initial_params_null, fn=null_likelihood_function_with_constraints, y=y, N=N, method="SANN")
+print(result_null)
+
+```
+
+
+## Comparison 
+
+```{r}
+logLik_alternative <- result_alternative$value
+logLik_null <- result_null$value
+```
+
+
+```{r}
+# Compute the GLRT statistic
+GLRT_statistic <- 2 * (logLik_alternative-logLik_null)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic, "\n"))
+print(paste("Degrees of freedom:", df, "\n"))
+print(paste("P-value:", p_value, "\n"))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+
+
+# using DEoptim
+TDO: put constraints 
+```{r}
+lower_bounds <- c(alpha=0, beta=0, rho=0.0001)
+upper_bounds <- c(alpha=1000, beta=1000, rho=10)  # You can adjust these bounds based on your domain knowledge.
+result_alternative <- DEoptim(fn=likelihood_function, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
+estimated_params <- result$optim$bestmem
+print(estimated_params)
+```
+
+
+```{r}
 # Optimize the alternative model using DEoptim
 
 lower_bounds <- c(alpha=0, beta=0, rho=0)
@@ -302,7 +479,7 @@ logLik_alternative <- -result_alternative$optim$bestval
 ```
 # Compute Standard errors 
 
-# Compare the nested Models
+## Compare the nested Models
 ```{r}
 # Compute the GLRT statistic
 GLRT_statistic <- -2 * (logLik_null - logLik_alternative)
@@ -324,7 +501,6 @@ if (p_value < 0.05) {
 } else {
   cat("Fail to reject the null hypothesis.\n")
 }
-
 
 ```
 
