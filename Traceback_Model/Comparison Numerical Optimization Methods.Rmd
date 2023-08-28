@@ -1,11 +1,8 @@
 ---
-title: "Traceback_Model_based_Diggle_1997"
+title: "Comparison Numerical Optimization Methods"
 author: "Sandra Rudeloff"
-date: "`r Sys.Date()`"
+date: "2023-08-28"
 output: html_document
-editor_options: 
-  markdown: 
-    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -261,10 +258,11 @@ compute_risk_matrix <- function(df_population, df_shops, alpha, beta) {
 likelihood_function <- function(params, y, N) {
   alpha <- params[1]
   beta <- params[2]
-  rho <- params[3]
+  rho <- sum(y) / sum(df_population$population)
+  #rho <- params[3]
   #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
   
-  if (alpha < 0 || beta < 0 || rho < 0.0001) {
+  if (alpha < 0 || beta < 0) {
     return(1e6)
   }
 
@@ -286,11 +284,8 @@ likelihood_function <- function(params, y, N) {
 Define likelihood function without alpha and beta
 
 ```{r}
-likelihood_function_null <- function(params, y, N) {
-  rho <- params[1]
-  if (rho < 0.0001) {
-    return(1e6) 
-  }
+likelihood_function_null <- function(rho, y, N) {
+#  rho <- params[1]
   
   mu <- rho * N
   
@@ -301,127 +296,17 @@ likelihood_function_null <- function(params, y, N) {
 
 ## Optimize
 
-### Optim
-
-#### Alternative Model
-
-```{r}
-initial_params_alternative <- c(alpha = 0.5, beta = 0.5, rho = 0.5)
-
-# Lower bounds for the parameters
-lower_bounds_alternative <- c(alpha = 0, beta = 0, rho = 0.0001)
-
-result_alternative_BFGS <- optim(par = initial_params_alternative, fn = likelihood_function, y = y, N = N, method = "L-BFGS-B", lower = lower_bounds_alternative, hessian = TRUE)
-
-print(result_alternative_BFGS )
-```
-
-#### Null Model
-
-Optimize the null model
-
-```{r}
-initial_params_null <- c(rho = 0.5)
-# Lower bounds for the parameters
-lower_bounds_null <- c(rho = 0.0001)
-result_null_BFGS <- optim(par = initial_params_null, fn = likelihood_function_null, y = y, N = N, method = "L-BFGS-B", lower = lower_bounds_alternative, hessian = TRUE)
-print(result_null_BFGS)
-```
-
-#### Compare using GLRT
-
-```{r}
-logLik_alternative_BFGS <- -result_alternative_BFGS$value
-logLik_null_BFGS <- -result_null_BFGS$value
-```
-
-```{r}
-GLRT_statistic_BFGS <- 2 *(logLik_alternative_BFGS - logLik_null_BFGS)
-
-# Determine the degrees of freedom (difference in number of parameters between the two models)
-df <- 2  # alpha and beta are the additional parameters in the alternative model
-
-# Compute the p-value
-p_value_BFGS <- 1 - pchisq(GLRT_statistic_BFGS, df)
-
-# Print the results
-print(paste("GLRT statistic:", GLRT_statistic_BFGS, "\n"))
-print(paste("Degrees of freedom:", df, "\n"))
-print(paste("P-value:", p_value_BFGS, "\n"))
-
-# Decide on the hypothesis based on a significance level (e.g., 0.05)
-if (p_value_BFGS < 0.05) {
-  cat("Reject the null hypothesis in favor of the alternative.\n")
-} else {
-  cat("Fail to reject the null hypothesis.\n")
-}
-```
-
-### SANN
-
-#### Alternative Model
-
-```{r}
-initial_params_alternative <- c(alpha = 0.5, beta = 0.5, rho = 0.5)
-
-# Lower bounds for the parameters
-lower_bounds_alternative <- c(alpha = 0, beta = 0, rho = 0.0001)
-
-result_alternative_SANN <- optim(par = initial_params_alternative, fn = likelihood_function, y = y, N = N, method = "SANN", hessian = TRUE)
-
-print(result_alternative_SANN )
-```
-
-#### Null Model
-
-Optimize the null model
-
-```{r}
-initial_params_null <- c(rho = 0.5)
-
-result_null_SANN <- optim(par = initial_params_null, fn = likelihood_function_null, y = y, N = N, method = "SANN", hessian = TRUE)
-print(result_null_SANN)
-```
-
-#### Compare using GLRT
-
-```{r}
-logLik_alternative_SANN <- -result_alternative_SANN$value
-logLik_null_SANN <- -result_null_SANN$value
-```
-
-```{r}
-GLRT_statistic <- 2 *(logLik_alternative_SANN - logLik_null_SANN)
-
-# Determine the degrees of freedom (difference in number of parameters between the two models)
-df <- 2  # alpha and beta are the additional parameters in the alternative model
-
-# Compute the p-value
-p_value <- 1 - pchisq(GLRT_statistic, df)
-
-# Print the results
-print(paste("GLRT statistic:", GLRT_statistic, "\n"))
-print(paste("Degrees of freedom:", df, "\n"))
-print(paste("P-value:", p_value, "\n"))
-
-# Decide on the hypothesis based on a significance level (e.g., 0.05)
-if (p_value < 0.05) {
-  cat("Reject the null hypothesis in favor of the alternative.\n")
-} else {
-  cat("Fail to reject the null hypothesis.\n")
-}
-```
-
 ### Deoptim
 
 #### Alternative Model
 
 ```{r}
-lower_bounds <- c(alpha=0, beta=0, rho=0.0001)
-upper_bounds <- c(alpha=1000, beta=1000, rho=10) 
+lower_bounds <- c(alpha=0, beta=0)
+upper_bounds <- c(alpha=1000, beta=1000) 
 result_alternative_DEoptim <- DEoptim(fn=likelihood_function, lower=lower_bounds, upper=upper_bounds, y=y, N=N)
-print(result_alternative_DEoptim)
+print(result_alternative_DEoptim$optim$bestmem)
 ```
+
 
 #### Null Model
 
@@ -432,11 +317,17 @@ result_null_DEoptim <- DEoptim(fn=likelihood_function_null, lower=lower_bounds, 
 print(result_null_DEoptim)
 ```
 
-# Compare the nested Models
+```{r}
+
+```
+
+
+#### Compare the nested Models
 
 ```{r}
 logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
-logLik_null_DEoptim <- -result_null_DEoptim$optim$bestval
+#logLik_null_DEoptim <- -result_null_DEoptim$optim$bestval
+logLik_null_DEoptim <- - likelihood_function_null(  rho = sum(y) / sum(df_population$population), y=y, N=N)
 ```
 
 ```{r}
@@ -460,3 +351,120 @@ if (p_value < 0.05) {
   cat("Fail to reject the null hypothesis.\n")
 }
 ```
+
+
+
+### Generalized Simulated Annealing
+
+#### Alternative Model
+
+```{r}
+library(GenSA)
+lower_bounds <- c(0, 0, 0.0001)
+upper_bounds <- c(1000, 1000, 10)
+
+alpha_start <- 1  # Replace with a suitable starting value
+beta_start <- 1   # Replace with a suitable starting value
+rho_start <- 1    # Replace with a suitable starting value
+
+
+result_alternative_GenSA <- GenSA(par = c(alpha_start, beta_start, rho_start), fn = likelihood_function, lower = lower_bounds, upper = upper_bounds, y = y, N = N)
+print(result_alternative_GenSA)
+```
+
+#### Null Model
+
+```{r}
+lower_bounds <- c(rho=0.0001)
+result_null_GenSA <- GenSA(par = c(rho), fn = likelihood_function_null, lower = lower_bounds, y = y, N = N)
+print(result_null_GenSA)
+```
+
+#### Compare the nested Models
+
+```{r}
+logLik_alternative_GenSA <- -result_alternative_GenSA$optim$bestval
+logLik_null_GenSA <- -result_null_GenSA$optim$bestval
+```
+
+```{r}
+GLRT_statistic <- 2 *(logLik_alternative_GenSA - logLik_null_GenSA)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic))
+print(paste("Degrees of freedom:", df))
+print(paste("P-value:", p_value))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+#### Visualize the function with the given alpha and beta
+$\rho * f(x)$
+
+
+### Genetic Algorithm
+
+#### Alternative Model
+
+```{r}
+library(GA)
+lower_bounds <- c(alpha=0, beta=0, rho=0.0001)
+upper_bounds <- c(alpha=1000, beta=1000, rho=10) 
+
+result_alternative_ga <- ga(type = "real-valued", fitness = likelihood_function, lower = lower_bounds, y = y, N = N, upper =upper_bounds )
+
+print(result_alternative_ga@solution)
+```
+
+#### Null Model
+
+```{r}
+lower_bounds <- c(rho=0.0001)
+
+result_null_ga <- ga(type = "real-valued", fitness = likelihood_function_null, lower = lower_bounds, y = y, N = N)
+
+print(result_null_ga@solution)
+```
+
+#### Compare the nested Models
+
+```{r}
+logLik_alternative_ga <- -result_alternative_ga$optim$bestval
+logLik_null_ga <- -result_null_ga$optim$bestval
+```
+
+```{r}
+GLRT_statistic <- 2 *(logLik_alternative_ga - logLik_null_ga)
+
+# Determine the degrees of freedom (difference in number of parameters between the two models)
+df <- 2  # alpha and beta are the additional parameters in the alternative model
+
+# Compute the p-value
+p_value <- 1 - pchisq(GLRT_statistic, df)
+
+# Print the results
+print(paste("GLRT statistic:", GLRT_statistic))
+print(paste("Degrees of freedom:", df))
+print(paste("P-value:", p_value))
+
+# Decide on the hypothesis based on a significance level (e.g., 0.05)
+if (p_value < 0.05) {
+  cat("Reject the null hypothesis in favor of the alternative.\n")
+} else {
+  cat("Fail to reject the null hypothesis.\n")
+}
+```
+
+
+
