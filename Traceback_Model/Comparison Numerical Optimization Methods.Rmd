@@ -317,13 +317,8 @@ result_null_DEoptim <- DEoptim(fn=likelihood_function_null, lower=lower_bounds, 
 print(result_null_DEoptim)
 ```
 
-```{r}
-
-```
-
 
 #### Compare the nested Models
-
 ```{r}
 logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
 #logLik_null_DEoptim <- -result_null_DEoptim$optim$bestval
@@ -360,15 +355,13 @@ if (p_value < 0.05) {
 
 ```{r}
 library(GenSA)
-lower_bounds <- c(0, 0, 0.0001)
-upper_bounds <- c(1000, 1000, 10)
+lower_bounds <- c(0, 0)
+upper_bounds <- c(1000, 1000)
 
 alpha_start <- 1  # Replace with a suitable starting value
 beta_start <- 1   # Replace with a suitable starting value
-rho_start <- 1    # Replace with a suitable starting value
 
-
-result_alternative_GenSA <- GenSA(par = c(alpha_start, beta_start, rho_start), fn = likelihood_function, lower = lower_bounds, upper = upper_bounds, y = y, N = N)
+result_alternative_GenSA <- GenSA(par = c(alpha_start, beta_start), fn = likelihood_function, lower = lower_bounds, upper = upper_bounds, y = y, N = N)
 print(result_alternative_GenSA)
 ```
 
@@ -419,8 +412,8 @@ $\rho * f(x)$
 
 ```{r}
 library(GA)
-lower_bounds <- c(alpha=0, beta=0, rho=0.0001)
-upper_bounds <- c(alpha=1000, beta=1000, rho=10) 
+lower_bounds <- c(alpha=0, beta=0)
+upper_bounds <- c(alpha=1000, beta=1000) 
 
 result_alternative_ga <- ga(type = "real-valued", fitness = likelihood_function, lower = lower_bounds, y = y, N = N, upper =upper_bounds )
 
