@@ -67,41 +67,66 @@ no_of_cells <- 100
 number of people at risk in each subregion $N$
 
 ```{r}
-read_population_data <- function(investigation_scenario,no_of_cells ) {  
+read_population_data <- function(investigation_scenario, no_of_cells) {
   cells_per_row <- sqrt(no_of_cells)
   
   # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
   centroid_coords <- seq(0.05, by = 0.1, length.out = cells_per_row)
-  df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
+  df_population <-
+    expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
-  population_type <- subset(scenarios_data_population, scenario == investigation_scenario)$population_type
-  total_population <- subset(scenarios_data_population, scenario == investigation_scenario)$total_population
+  population_type <-
+    subset(scenarios_data_population,
+           scenario == investigation_scenario)$population_type
+  total_population <-
+    subset(scenarios_data_population,
+           scenario == investigation_scenario)$total_population
   
-  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" || population_type == "linear") {
+  if (population_type == "radial_clusters" ||
+      population_type ==  "main_and_small_clusters" ||
+      population_type == "linear") {
     # used for all radial type populations
-    desired_gradient <- subset(scenarios_data_population, scenario == investigation_scenario)$desired_gradient
-    # high values mean a large spreading 
+    desired_gradient <-
+      subset(scenarios_data_population,
+             scenario == investigation_scenario)$desired_gradient
+    # high values mean a large spreading
   }
   
-  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" ) {
-    num_clusters <- subset(scenarios_data_population, scenario == investigation_scenario)$num_clusters
+  if (population_type == "radial_clusters" ||
+      population_type ==  "main_and_small_clusters") {
+    num_clusters <-
+      subset(scenarios_data_population,
+             scenario == investigation_scenario)$num_clusters
   }
   
   # generate population
-  df_population <- switch(population_type,
-                          "random" = generate_random_population(df_population, total_population),
-                          "uniform" = generate_uniform_population(df_population, total_population),
-                          "linear" = generate_linear_population(df_population, total_population, desired_gradient),
-                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
-                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
+  df_population <- switch(
+    population_type,
+    "random" = generate_random_population(df_population, total_population),
+    "uniform" = generate_uniform_population(df_population, total_population),
+    "linear" = generate_linear_population(df_population, total_population, desired_gradient),
+    "radial_clusters" = generate_radial_clusters_population(
+      df_population,
+      total_population,
+      desired_gradient,
+      num_clusters
+    ),
+    "main_and_small_clusters" = generate_main_and_small_clusters_population(
+      df_population,
+      total_population,
+      desired_gradient,
+      num_clusters
+    )
   )
   
   return(df_population)
 }
 
-scenarios_data_population <- read_excel("./Data/scenarios.xlsx", sheet = "Population")
+scenarios_data_population <-
+  read_excel("./Data/scenarios.xlsx", sheet = "Population")
 
-df_population <- read_population_data(investigation_scenario, no_of_cells) 
+df_population <-
+  read_population_data(investigation_scenario, no_of_cells) 
 ```
 
 ## Outbreak Data
@@ -167,31 +192,63 @@ Visualize
 ```{r}
 ggplot() +
   # Plot the population data
-  geom_tile(data=df_population, aes(x=x_centroid, y=y_centroid, fill=population), width = 0.1, height = 0.1, alpha = 0.8) +
-  scale_fill_gradient(low = "white", high = "cadetblue",name = "Population", breaks = breaks_population) +
+  geom_tile(
+    data = df_population,
+    aes(x = x_centroid, y = y_centroid, fill = population),
+    width = 0.1,
+    height = 0.1,
+    alpha = 0.8
+  ) +
+  scale_fill_gradient(
+    low = "white",
+    high = "cadetblue",
+    name = "Population",
+    breaks = breaks_population
+  ) +
   
-
+  
   # Introduce a new scale for the shop chains
   new_scale_fill() +
   
   # Plot the shops data
-  geom_point(data=df_shops, aes(x=store_x, y=store_y, fill=chain), size=3, shape=23, alpha = 0.8) +
-  scale_fill_manual(values=chain_colors, name="Shop Chain") +
+  geom_point(
+    data = df_shops,
+    aes(x = store_x, y = store_y, fill = chain),
+    size = 3,
+    shape = 23,
+    alpha = 0.8
+  ) +
+  scale_fill_manual(values = chain_colors, name = "Shop Chain") +
   
   # Plot the outbreak data
-  geom_point(data=df_outbreak, aes(x=case_x, y=case_y), color="red", size=2, shape=21, fill="red", alpha=0.8) +
-
+  geom_point(
+    data = df_outbreak,
+    aes(x = case_x, y = case_y),
+    color = "red",
+    size = 2,
+    shape = 21,
+    fill = "red",
+    alpha = 0.8
+  ) +
+  
   # Adjust the x and y axis breaks to have lines every 100m
-  scale_x_continuous(breaks=seq(0, 1, by=0.1)) +
-  scale_y_continuous(breaks=seq(0, 1, by=0.1)) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
+  
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
   
   # Add labels and theme
-  labs(title=sprintf("Visualization of Scenario %s", investigation_scenario),
-       x="X Coordinate",
-       y="Y Coordinate",
-       color="Shop Chain") +
+  labs(
+    title = sprintf("Visualization of Scenario %s", investigation_scenario),
+    x = "X Coordinate",
+    y = "Y Coordinate",
+    color = "Shop Chain"
+  ) +
   theme_minimal() +
-  theme(legend.position="bottom", aspect.ratio=1,  panel.grid.minor = element_blank()) 
+  theme(
+    legend.position = "bottom",
+    aspect.ratio = 1,
+    panel.grid.minor = element_blank()
+  ) 
 ```
 
 # Model
