@@ -55,8 +55,9 @@ source("generate_population.R")
 # Input Data
 
 ```{r}
-investigation_scenario <- 1
+investigation_scenario <- 8
 no_of_cells <- 100
+set.seed(333)
 ```
 
 # Collect Variables
@@ -81,13 +82,14 @@ read_population_data <-
     df_population <-
       expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
     
-    population_type <-
-      subset(scenarios_data_population,
-             scenario == investigation_scenario)$population_type
     total_population <-
       subset(scenarios_data_population,
              scenario == investigation_scenario)$total_population
-    
+        
+    population_type <-
+      subset(scenarios_data_population,
+             scenario == investigation_scenario)$population_type
+
     if (population_type == "radial_clusters" ||
         population_type ==  "main_and_small_clusters" ||
         population_type == "linear") {
@@ -150,7 +152,7 @@ df_shops$store_x <- df_shops$store_x / 1000
 df_shops$store_y <- df_shops$store_y / 1000
 ```
 
-## Visualization
+## Visualization / Plotting
 
 Assign colors to different chains
 
@@ -168,32 +170,11 @@ names(chain_colors) <- unique_chains
 
 Assign breaks for the legend of the population
 
-```{r}
-min_population <- min(df_population$population)
-max_population <- max(df_population$population)
-
-# Calculate the range of population values
-range_population <- max_population - min_population
-
-# Dynamically determine the step size based on the range
-if (range_population <= 10) {
-  step_size <- 2
-} else if (range_population <= 20) {
-  step_size <- 5
-} else if (range_population <= 50) {
-  step_size <- 10
-} else {
-  step_size <- 15
-}
-
-# Generate the sequence of breaks
-breaks_population <- seq(min_population, max_population, by = step_size)
-```
 
 Visualize
-
 ```{r}
-ggplot() +
+# Create the main plot with population, stores, and outbreak cases
+p_main <- ggplot() +
   # Plot the population data
   geom_tile(
     data = df_population,
@@ -205,8 +186,7 @@ ggplot() +
   scale_fill_gradient(
     low = "white",
     high = "cadetblue",
-    name = "Population",
-    breaks = breaks_population
+    guide = "none"
   ) +
   
   # Introduce a new scale for the shop chains
@@ -249,8 +229,29 @@ ggplot() +
     legend.position = "bottom",
     aspect.ratio = 1,
     panel.grid.minor = element_blank()
-  ) 
+  )
+
+# Create a custom legend for the population
+legend_df <- data.frame(
+  population = seq(min(df_population$population), max(df_population$population), length.out = 100)
+)
+p_legend <- ggplot(legend_df, aes(x = 1, y = population, fill = population)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "cadetblue") +
+  scale_y_continuous(breaks = floor(seq(min(df_population$population), max(df_population$population), length.out = 5))) +  # Add labels to the legend
+  theme_minimal() +
+  labs(title = "", x = "", y = "") + 
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(),  # Remove x-axis
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank()) # Remove grid lines
+
+# Combine the main plot and the custom legend
+p_combined <- grid.arrange(p_main, p_legend, ncol = 2, widths = c(4, 1))
+
+
+plot(p_combined)
+
 ```
+
 
 # Model
 
