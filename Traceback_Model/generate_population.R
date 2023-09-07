@@ -1,5 +1,6 @@
 library(ggplot2)
 library(plotly)
+library(gridExtra)
 
 assign_remaining_population <- function(df_population, total_population) {
   remaining_population <- total_population - sum(df_population$population)
@@ -121,21 +122,21 @@ generate_main_and_small_clusters_population <- function(df_population, total_pop
 }
 
 # Plotting ----
-plot_population <- function(df_population, investigation_scenario) {
+plot_and_save_population <- function(df_population, investigation_scenario) {
   if (!dir.exists("Results/Population")) {
     dir.create("Results/Population", recursive = TRUE)
   }
   file_name = paste0(sprintf("Results/Population/Population_Scenario_%s", investigation_scenario), ".png")
   
-  # Create the plot
-  p <- ggplot(df_population, aes(x = x_centroid, y = y_centroid)) +
-    geom_tile(aes(fill = population), color = "gray") +
-    scale_fill_gradient(low = "white", high = "darkred", guide = "none") +  # Disable the default legend
-    scale_x_continuous(breaks = seq(min(df_population$x_centroid - 50), max(df_population$x_centroid + 50), by = 200)) +  # Set x-axis breaks
-    scale_y_continuous(breaks = seq(min(df_population$y_centroid -50), max(df_population$y_centroid +50 ), by = 200)) +
-    coord_equal() +
-    labs(title = sprintf("Population Distribution Scenario %s", investigation_scenario), x = "X Centroid", y = "Y Centroid") +
-    theme_minimal()
+  # Create the main plot
+  p <- ggplot(df_population, aes(x = x_centroid, y = y_centroid, fill = population)) +
+    geom_tile(width = 0.1, height = 0.1, alpha = 0.8) +
+    scale_fill_gradient(low = "white", high = "cadetblue", guide = "none") +  # Disable the default legend
+    scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +  # Set x-axis breaks
+    scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+    labs(title = sprintf("Visualization of Scenario %s", investigation_scenario), x = "X Coordinate", y = "Y Coordinate") +
+    theme_minimal() +
+    theme(aspect.ratio = 1, panel.grid.minor = element_blank())
   
   # Create a custom legend
   legend_df <- data.frame(
@@ -143,23 +144,18 @@ plot_population <- function(df_population, investigation_scenario) {
   )
   p_legend <- ggplot(legend_df, aes(x = 1, y = population, fill = population)) +
     geom_tile() +
-    scale_fill_gradient(low = "white", high = "darkred") +
+    scale_fill_gradient(low = "white", high = "cadetblue") +
     scale_y_continuous(breaks = floor(seq(min(df_population$population), max(df_population$population), length.out = 5))) +  # Add labels to the legend
     theme_minimal() +
     labs(title = "", x = "", y = "") + 
     theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(),  # Remove x-axis
           panel.grid.major = element_blank(), panel.grid.minor = element_blank()) # Remove grid lines
-
   
   # Combine the plot and the legend
-  p_combined <- gridExtra::grid.arrange(p, p_legend, ncol = 2, widths = c(4, 1))
-
-  ggsave(file_name, p_combined, width = 8, height = 5)
-  # Convert the ggplot figure to a plotly figure
-  p <- ggplotly(p)
+  p_combined <- grid.arrange(p, p_legend, ncol = 2, widths = c(4, 1))
   
-  # Print the plot
-  print(p)
+  ggsave(file_name, p_combined, width = 8, height = 5)
+  plot(p_combined)
 }
 
 

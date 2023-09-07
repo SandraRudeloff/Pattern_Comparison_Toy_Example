@@ -1,6 +1,6 @@
 library(readxl)
 source("generate_population.R")
-set.seed(12)
+set.seed(333)
 # Input ----
 scenarios <- c(1,2,3,4,5,6,7,8,9,10,11,12, 13, 14, 15)
 no_of_cells <- 100
@@ -23,7 +23,7 @@ for (investigation_scenario in scenarios) {
   cells_per_row <- sqrt(no_of_cells)
   
   # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
-  centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
+  centroid_coords <- seq(0.05, by = 0.1, length.out = cells_per_row)
   df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
   
   # generate population
@@ -34,5 +34,5 @@ for (investigation_scenario in scenarios) {
                           "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
                           "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
                           )
-  plot_population(df_population,investigation_scenario)
+  plot_and_save_population(df_population,investigation_scenario)
 }
