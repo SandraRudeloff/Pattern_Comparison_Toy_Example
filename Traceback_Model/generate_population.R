@@ -2,6 +2,59 @@ library(ggplot2)
 library(plotly)
 library(gridExtra)
 
+generate_population <-
+  function(population_data, no_of_cells) {
+    cells_per_row <- sqrt(no_of_cells)
+    
+    # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
+    centroid_coords <-
+      seq(0.05, by = 0.1, length.out = cells_per_row)
+    df_population <-
+      expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
+    
+    total_population <- population_data$total_population
+    
+    population_type <- population_data$population_type
+    
+    if (population_type == "radial_clusters" ||
+        population_type ==  "main_and_small_clusters" ||
+        population_type == "linear") {
+      # used for all radial type populations
+      desired_gradient <- population_data$desired_gradient
+      # high values mean a large spreading
+    }
+    
+    if (population_type == "radial_clusters" ||
+        population_type ==  "main_and_small_clusters") {
+      num_clusters <- population_data$num_clusters
+    }
+    
+    # generate population
+    df_population <- switch(
+      population_type,
+      "random" = generate_random_population(df_population, total_population),
+      "uniform" = generate_uniform_population(df_population, total_population),
+      "linear" = generate_linear_population(df_population, total_population, desired_gradient),
+      "radial_clusters" = generate_radial_clusters_population(
+        df_population,
+        total_population,
+        desired_gradient,
+        num_clusters, 
+        no_of_cells
+      ),
+      "main_and_small_clusters" = generate_main_and_small_clusters_population(
+        df_population,
+        total_population,
+        desired_gradient,
+        num_clusters, 
+        no_of_cells
+      )
+    )
+    
+    return(df_population)
+}
+
+
 assign_remaining_population <- function(df_population, total_population) {
   remaining_population <- total_population - sum(df_population$population)
 
@@ -46,8 +99,7 @@ generate_linear_population <- function(df_population, total_population, desired_
 }
 
 # Radial Clusters ----
-# Radial cluster with num_cluster = 1 is the same as the old radial code
-generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
+generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
 
@@ -76,7 +128,7 @@ generate_radial_clusters_population <- function(df_population, total_population,
 }
 
 # Radial main and small clusters ----
-generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters) {
+generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
 
