@@ -40,12 +40,17 @@ covariates.
 # Libraries
 
 ```{r}
+# Read Scenario Definition from Excel
 library(readxl)
 library(dplyr)
+
+# Visualization
 library(ggplot2)
 library(ggnewscale)
 library(RColorBrewer)
 library(plotly)
+
+library(reticulate) # working with python
 
 # Optimizer
 library(DEoptim)
@@ -76,13 +81,8 @@ df_population <- generate_population(population_data, no_of_cells)
 ```
 
 
-## Outbreak Data
 
-```{r}
-df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario_id == investigation_scenario)[,2:3]
-df_outbreak$case_x <- df_outbreak$case_x / 1000
-df_outbreak$case_y <- df_outbreak$case_y / 1000
-```
+
 
 ## Shops Data
 ```{r}
@@ -110,15 +110,28 @@ print(df_shops)
 ```
 
 
-
-
-
+## Outbreak Data
 
 ```{r}
-df_shops <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Store_Locations"), scenario_id == investigation_scenario)[,2:4]
-df_shops$store_x <- df_shops$store_x / 1000
-df_shops$store_y <- df_shops$store_y / 1000
+# Load the Python script and get a reference to the run_script function
+source_python("C:/Users/Sandra.Rudeloff/Documents/Pattern Comparison Project/Toy_Example/Diffusion_Model/outbreak_generation_1.py")
+
+# Convert the df_shops data frame to a Python data frame
+df_shops_py <- r_to_py(df_shops)
+df_population_py <- r_to_py(df_population)
+
+# Call the Python function, passing the stores data frame and other parameters
+generate_outbreak(investigation_scenario = 1, df_shops_py, df_population_py, list_outbreak_scenario_sizes = c(10))
+
 ```
+
+```{r}
+df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario_id == investigation_scenario)[,2:3]
+df_outbreak$case_x <- df_outbreak$case_x / 1000
+df_outbreak$case_y <- df_outbreak$case_y / 1000
+```
+
+
 
 ## Visualization / Plotting
 
