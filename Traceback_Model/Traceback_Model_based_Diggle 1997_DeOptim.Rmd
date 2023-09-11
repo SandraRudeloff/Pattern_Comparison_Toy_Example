@@ -80,8 +80,9 @@ population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Populatio
 df_population <- generate_population(population_data, no_of_cells) 
 ```
 
-
-
+```{r}
+df_population$cell_id <- as.numeric(row.names(df_population))
+```
 
 
 ## Shops Data
@@ -104,31 +105,94 @@ for (current_chain_id in unique(chain_details$chain_id)) {
   
   df_shops <- rbind(df_shops, df_shops_current)
 }
+```
 
-# Print the final data
-print(df_shops)
+```{r}
+# Assign the correct cell_id to the stores
+df_shops <- df_shops %>%
+  rowwise() %>%
+  mutate(
+    cell_id = which(
+      (df_population$x_centroid - 0.05) <= store_x &
+      (df_population$x_centroid + 0.05) >= store_x &
+      (df_population$y_centroid - 0.05) <= store_y &
+      (df_population$y_centroid + 0.05) >= store_y
+    )
+  ) %>%
+  ungroup()
+```
+
+## Outbreak Data
+```{r}
+# Load the Python script and get a reference to the run_script function
+source_python("../Diffusion Model/gravity_model.py")
 ```
 
 
-## Outbreak Data
-
 ```{r}
-# Load the Python script and get a reference to the run_script function
-source_python("C:/Users/Sandra.Rudeloff/Documents/Pattern Comparison Project/Toy_Example/Diffusion_Model/outbreak_generation_1.py")
-
 # Convert the df_shops data frame to a Python data frame
 df_shops_py <- r_to_py(df_shops)
 df_population_py <- r_to_py(df_population)
+```
 
-# Call the Python function, passing the stores data frame and other parameters
-generate_outbreak(investigation_scenario = 1, df_shops_py, df_population_py, list_outbreak_scenario_sizes = c(10))
+# calculation of flow
+```{r}
+flow <- hyman_model(0.4, 0.001,df_population_py, df_shops_py)
+```
 
+
+# Generating Outbreaks
+```{r}
+source_python("../Diffusion Model/gravity_model.py")
 ```
 
 ```{r}
-df_outbreak <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak_Locations"), scenario_id == investigation_scenario)[,2:3]
-df_outbreak$case_x <- df_outbreak$case_x / 1000
-df_outbreak$case_y <- df_outbreak$case_y / 1000
+outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak"), scenario_id == investigation_scenario)
+```
+
+```{r}
+# Test if the input is a character (string)
+if (is.character(outbreak_data$list_outbreak_scenario_sizes)) {
+  list_outbreak_scenario_sizes <- as.integer( unlist(strsplit(outbreak_data$list_outbreak_scenario_sizes, ",")))
+} else {
+  list_outbreak_scenario_sizes <- as.integer(outbreak_data$list_outbreak_scenario_sizes)
+}
+
+no_of_trials_per_scenario = as.integer(outbreak_data$no_of_trials_per_scenario) #Hier könnte man auch noch eine Logik hinterlegen
+```
+
+```{r}
+# Number of stores per chain
+chains <- df_shops %>%
+  group_by(chain) %>%
+  summarise(count = n())
+```
+
+
+```{r}
+# Create a list to store the outbreak data
+outbreak_list <- list()
+
+# Loop over each chain, outbreak scenario size, and trial number
+for (chain in unique(chains$chain)) {
+  for (no_of_outbreak_cases in list_outbreak_scenario_sizes) {
+    for (trial in seq_len(no_of_trials_per_scenario)) {
+      
+      # Generate the outbreak data
+      outbreak <- generate_outbreak(chain, no_of_outbreak_cases, flow, df_shops_py, df_population_py)
+      
+      # Create a unique identifier for this outbreak scenario
+      identifier <- paste(chain, no_of_outbreak_cases, trial, sep = "_")
+      
+      # Save the outbreak data to the list using the identifier as the name
+      outbreak_list[[identifier]] <- outbreak
+    }
+  }
+}
+```
+
+```{r}
+df_outbreak <- outbreak_list$`Chain 1_10_1`
 ```
 
 
@@ -186,7 +250,7 @@ p_main <- ggplot() +
   # Plot the outbreak data
   geom_point(
     data = df_outbreak,
-    aes(x = case_x, y = case_y),
+    aes(x = x_centroid , y = y_centroid),
     color = "red",
     size = 2,
     shape = 21,
