@@ -18,7 +18,7 @@ def get_xy(outbreak_scenario, scenario, df_population):
     return df
 
 
-def generate_outbreak(
+def generate_outbreaks(
     investigation_scenario, df_shops, df_population, list_outbreak_scenario_sizes
 ):
     ## Trials per outbreak scenario size ##
@@ -30,6 +30,9 @@ def generate_outbreak(
     #         (no_of_outbreak_cases * chains[chain]) / 5
     #     )
 
+    # Ensure list_outbreak_scenario_sizes is a list
+    if not isinstance(list_outbreak_scenario_sizes, list):
+        list_outbreak_scenario_sizes = [list_outbreak_scenario_sizes]
     no_of_trials_per_scenario = 1
 
     # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
@@ -37,17 +40,23 @@ def generate_outbreak(
 
     all_stores = df_shops
 
-    n_of_chains = all_stores["Chain"].nunique()
+    n_of_chains = all_stores["chain"].nunique()
     # Number of stores per chain
-    chains = all_stores.groupby(["Chain"])["Chain"].agg("count")
-
+    chains = all_stores.groupby(["chain"])["chain"].agg("count")
     for chain in chains.index:
         for no_of_outbreak_cases in list_outbreak_scenario_sizes:
             for trial in range(0, no_of_trials_per_scenario):
                 outbreak_name = f"{chain}_{no_of_outbreak_cases}_{trial}"
 
+                print(chain)
+                print(type(chain))
+                print(no_of_outbreak_cases)
+                print(all_stores)
+                print(type(all_stores))
+                print(investigation_scenario)
+                print("ENde")
                 outbreak_scenario_cells = generate_outbreak(
-                    chain, no_of_outbreak_cases, all_stores, investigation_scenario
+                    str(chain), no_of_outbreak_cases, all_stores, investigation_scenario
                 )
 
                 outbreak_scenario = get_xy(

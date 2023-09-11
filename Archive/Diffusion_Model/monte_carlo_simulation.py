@@ -52,7 +52,7 @@ def get_flow(sales_per_cell, selected_stores, scenario):
 
 
 def get_stores(chain_name, all_stores):
-    selected_stores = all_stores[all_stores["Chain"] == chain_name]
+    selected_stores = all_stores[all_stores["chain"] == chain_name]
     return selected_stores
 
 
@@ -77,6 +77,10 @@ def get_location_for_outbreak(cumulative_distribution):
 
 
 def generate_outbreak(chain_name, no_of_cases, all_stores, scenario):
+    print(chain_name)
+    print(no_of_cases)
+    print(all_stores)
+    print(scenario)
     selected_stores = get_stores(chain_name, all_stores)
 
     sales_per_cell = get_production_potential(all_stores)
