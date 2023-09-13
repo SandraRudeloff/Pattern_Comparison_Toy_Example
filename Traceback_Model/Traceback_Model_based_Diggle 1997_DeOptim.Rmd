@@ -55,6 +55,7 @@ library(DEoptim) # optimizer
 source("generate_population.R")
 source("generate_supermarkets.R")
 source("visualize_scenario.R")
+source("raised_incidence_model_1997.R")
 source_python("../Diffusion Model/gravity_model.py")
 source_python("../Diffusion Model/outbreak_generation.py")
 ```
@@ -79,10 +80,7 @@ population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Populatio
 
 ```{r}
 df_population <- generate_population(population_data, no_of_cells) 
-```
-
-```{r}
-df_population$cell_id <- as.numeric(row.names(df_population))
+df_population$cell_id <- as.numeric(row.names(df_population)) # assign cell_ids
 ```
 
 
@@ -106,8 +104,8 @@ for (current_chain_id in unique(chain_details$chain_id)) {
 }
 ```
 
+Assign the correct cell_id to the stores
 ```{r}
-# Assign the correct cell_id to the stores
 df_shops <- df_shops %>%
   rowwise() %>%
   mutate(
@@ -163,8 +161,7 @@ unique_chains <- unique(df_shops$chain)
 outbreak_list <- list()
 
 # Loop over each chain, outbreak scenario size, and trial number
-for (chain in unique_chains) {
-  for (no_of_outbreak_cases in list_outbreak_scenario_sizes) {
+for (chain in unique_chains) {  for (no_of_outbreak_cases in list_outbreak_scenario_sizes) {
     for (trial in seq_len(no_of_trials_per_scenario)) {
       
       # Generate the outbreak data
@@ -186,7 +183,6 @@ df_outbreak <- outbreak_list$`Chain 1_10_1`
 ```
 
 
-
 ## Visualization / Plotting
 
 ```{r}
@@ -201,15 +197,7 @@ visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak)
 Observed number of cases in each subregion
 
 ```{r}
-# function to check if a point is within a square centered at (x, y) with side length 2*delta
-point_in_square <- function(px, py, x, y, delta) {
-  return(px >= (x - delta) & px <= (x + delta) & py >= (y - delta) & py <= (y + delta))
-}
-
-y <- numeric(nrow(df_population))
-for (i in 1:nrow(df_population)) {
-  y[i] <- sum(point_in_square(df_outbreak$case_x, df_outbreak$case_y, df_population$x_centroid[i], df_population$y_centroid[i], delta))
-}
+y <- get_y(df_population, df_outbreak, delta)
 ```
 
 ## Construct N
@@ -217,96 +205,7 @@ for (i in 1:nrow(df_population)) {
 Number of people at risk in each subregion
 
 ```{r}
-N <- df_population$population
-```
-
-## Helper functions
-
-```{r}
-# Calculate the Risk Function for each Source and subregion
-# Compute distance between two points
-compute_distance <- function(x1, y1, x2, y2) {
-  return(sqrt((x1 - x2)^2 + (y1 - y2)^2))
-}
-
-# Risk function for distance d from the source
-risk_function <- function(d, alpha, beta) {
-  return(1 + alpha * exp(- (d/beta)^2))
-}
-```
-
-## Risk matrix
-
-The risk matrix contains on the rows the cells, 1 being in the left lower corner, and the stores on the columns.
-
-```{r}
-compute_risk_matrix <- function(df_population, df_shops, alpha, beta) {
-  risk_matrix <- matrix(0, nrow(df_population), nrow(df_shops))
-  for (i in 1:nrow(df_population)) {
-    for (j in 1:nrow(df_shops)) {
-      d <- compute_distance(df_population$x_centroid[i], df_population$y_centroid[i], df_shops$store_x[j], df_shops$store_y[j])
-      risk_matrix[i, j] <- risk_function(d, alpha, beta)
-    }
-  }
-  return(risk_matrix)
-}
-```
-
-## Likelihood
-
-### Alternative
-The expected value mu is the overall prevlance of the disease (rho) times the number of population in that cell times the risk_matrix value at that position
-mu enhtält einen value per cell. 
-
-Erstmal addieren wir alle expected values und die sind dann negativ und dann 
-```{r}
-likelihood_function_minimize <- function(params, y, N) {
-  alpha <- params[1]
-  beta <- params[2]
-  rho <- sum(y) / sum(df_population$population)
-  #rho <- params[3]
-  #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
-  
-  if (alpha < 0 || beta < 0) {
-    return(1e6)
-  }
-
-  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
-  mu <- rho * N * apply(risk_matrix, 1, prod)
-
-  log_likelihood <- -sum(mu) + sum(y * log(mu)) # without y! because it does not do anything for the optimization
-  #print(paste("likelihood: ", log_likelihood))
-  
-  if (is.nan(log_likelihood)) {
-    return(1e6)
-  }
-  return(-log_likelihood) # We return the negative likelihood because optimizers in R typically minimize
-}
-```
-
-```{r}
-likelihood_function_maximize <- function(params, y, N) {
-  alpha <- params[1]
-  beta <- params[2]
-  rho <- sum(y) / sum(df_population$population)
-  #rho <- params[3]
-  #print(paste("alpha: ", alpha, "beta: ", beta, "rho: ", rho))
-  
-  if (alpha < 0 || beta < 0) {
-    return(1e6)
-  }
-
-  risk_matrix <- compute_risk_matrix(df_population, df_shops, alpha, beta)
-  mu <- rho * N * apply(risk_matrix, 1, prod)
-
-  log_likelihood <- -sum(mu) + sum(y * log(mu)) # without y! because it does not do anything for the optimization
-  #print(paste("likelihood: ", log_likelihood))
-  
-  if (is.nan(log_likelihood)) {
-    return(-1e6)
-  }
-  return(log_likelihood)
-}
+N <- get_N(df_population)
 ```
 
 
@@ -322,16 +221,14 @@ upper_bounds <- c(alpha = 5000, beta = 50)
 ```
 
 ```{r}
-logLik_null <- -likelihood_function_minimize(c(0,0), y=y, N=N)
+logLik_null <- -likelihood_function_minimize(c(0,0), y=y, N=N, df_population = df_population, df_shops =df_shops)
 ```
 
-
 ### Deoptim
-
 #### Alternative Model
 
 ```{r}
-result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N)
+result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = df_shops)
 print(result_alternative_DEoptim$optim$bestmem)
 ```
 
@@ -351,7 +248,7 @@ p_value <- 1 - pchisq(GLRT_statistic, df)
 
 # Print the results
 print(paste("GLRT statistic:", GLRT_statistic))
-# print(paste("Degrees of freedom:", df))
+print(paste("Degrees of freedom:", df))
 print(paste("P-value:", p_value))
 
 # Decide on the hypothesis based on a significance level (e.g., 0.05)
@@ -367,74 +264,38 @@ if (p_value < 0.05) {
 ## DeOptim
 ```{r}
 print(paste("alpha: ", result_alternative_DEoptim$optim$bestmem[1], " beta: ", result_alternative_DEoptim$optim$bestmem[2]))
-print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N)))
-```
-
-```{r}
-likelihood_function_minimize(c(0, 0), y=y, N=N)
-```
-
-```{r}
-wrapper_likelihood_function <- function(params) {
-  y_fixed <- y  # Replace with the actual y values
-  N_fixed <- N  # Replace with the actual N values
-  return(likelihood_function_minimize(params, y_fixed, N_fixed))
-}
+print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N, df_population = df_population, df_shops = df_shops)))
 ```
 
 # Standard error
+```{r}
+z_value <- 1.96 # For a 95% confidence level
+```
+
 ## Hessian 
 ```{r}
-library(numDeriv)
-hessian_matrix <- hessian(wrapper_likelihood_function, c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]))
-inverse_hessian <- solve(hessian_matrix)
-standard_errors <- sqrt(diag(inverse_hessian))
+std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
 ```
 standard error gives an idea of how much the estimated parameter is expected to vary from sample to sample.
 
 In your specific case, you're dealing with a likelihood function for which you've estimated parameters (alpha and beta). The Hessian matrix at the maximum likelihood estimates gives you an idea of how "curved" the likelihood function is at that point. The inverse of this Hessian matrix is related to the variances (and covariances) of your parameter estimates. Taking the square root of the diagonal elements gives you the standard errors, which tell you how much those estimates are likely to vary if you were to collect new data and re-estimate the parameters.
 
+```{r}
+lower_bounds <- result_alternative_DEoptim$optim$bestmem - z_value * std_error_Hessian
+upper_bounds <- result_alternative_DEoptim$optim$bestmem + z_value * std_error_Hessian
+```
+
 ## Monte Carlo
 mplementing Monte Carlo simulations to estimate standard errors involves generating multiple simulated datasets based on your fitted model, then refitting the model to each of these datasets to obtain a distribution of parameter estimates. The standard deviation of this distribution will give you the standard error for each parameter.
 ```{r}
-# Initialize variables to store parameter estimates
-alpha_estimates <- numeric()
-beta_estimates <- numeric()
-
 # Number of simulations
-n_simulations <- 1000
-
-# Loop over simulations
-for (i in 1:n_simulations) {
-  
-  risk_matrix <- compute_risk_matrix(df_population, df_shops, result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2])
-  rho <- sum(y) / sum(df_population$population)
-  
-  mu <- rho * N * apply(risk_matrix, 1, prod)
-  
-  # Step 2: Generate simulated data (this will depend on your specific model)
-  simulated_y <- rpois(length(mu), lambda = mu)
-  
-  # Step 3: Fit the model to the simulated data
-  result_simulated <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = simulated_y, N = N)#,  DEoptim.control(itermax = 100))
-  
-  # Store the estimated parameters
-  alpha_estimates[i] <- result_simulated$optim$bestmem[1]
-  beta_estimates[i] <- result_simulated$optim$bestmem[2]
-  
-}
-
-# Step 4: Calculate standard errors
-se_alpha <- sd(alpha_estimates)
-se_beta <- sd(beta_estimates)
-
-# Print standard errors
-print(paste("Standard error of alpha: ", se_alpha))
-print(paste("Standard error of beta: ", se_beta))
-
+n_simulations <- 10
 ```
 
 
+```{r}
+std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
+```
 
 # Confidence Intervals
 Calculate Confidence Intervals: Use the formula for a confidence interval, which is:
@@ -443,7 +304,7 @@ Confidence Interval = Parameter Estimate ± (Z-value × Standard Error)
 
 ```{r}
 z_value <- 1.96 # For a 95% confidence level
-lower_bounds <- result_alternative_DEoptim$optim$bestmem - z_value * standard_errors
-upper_bounds <- result_alternative_DEoptim$optim$bestmem + z_value * standard_errors
+lower_bounds <- result_alternative_DEoptim$optim$bestmem - z_value * std_error_MC
+upper_bounds <- result_alternative_DEoptim$optim$bestmem + z_value * std_error_MC
 ```
 Interpret the Results: The lower_bounds and upper_bounds vectors now contain the lower and upper bounds of the confidence intervals for each parameter. If these intervals are narrow, it indicates that you can be fairly confident about the estimated parameter values. If they are wide, it suggests that there is more uncertainty.
