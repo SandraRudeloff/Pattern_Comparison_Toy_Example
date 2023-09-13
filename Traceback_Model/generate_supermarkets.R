@@ -27,7 +27,7 @@ generate_shops <- function(no_of_cells, chain_data){
 
 
 generate_uniform_sales <- function(num_stores) {
-  sales <- rep(1, num_stores)
+  sales <- rep(10, num_stores)
   return(sales)
 }
 

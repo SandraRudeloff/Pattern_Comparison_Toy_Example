@@ -40,8 +40,7 @@ covariates.
 # Libraries
 
 ```{r}
-# Read Scenario Definition from Excel
-library(readxl)
+library(readxl)# Read Scenario Definition from Excel
 library(dplyr)
 
 # Visualization
@@ -50,19 +49,21 @@ library(ggnewscale)
 library(RColorBrewer)
 library(plotly)
 
-library(reticulate) # working with python
+library(reticulate) # connection to python scripts
+library(DEoptim) # optimizer
 
-# Optimizer
-library(DEoptim)
 source("generate_population.R")
 source("generate_supermarkets.R")
+source("visualize_scenario.R")
+source_python("../Diffusion Model/gravity_model.py")
+source_python("../Diffusion Model/outbreak_generation.py")
 ```
 
 # Input Data
-
 ```{r}
 investigation_scenario <- 1
 no_of_cells <- 100
+delta <- 0.05  # Define half the side length of a square
 set.seed(333)
 ```
 
@@ -87,10 +88,8 @@ df_population$cell_id <- as.numeric(row.names(df_population))
 
 ## Shops Data
 ```{r}
-scenarios_overview <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Stores"), scenario_id == investigation_scenario)
 chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
 ```
-
 
 ```{r}
 df_shops <- data.frame()
@@ -123,58 +122,48 @@ df_shops <- df_shops %>%
 ```
 
 ## Outbreak Data
+Convert the df_shops data frame to a Python data frame
 ```{r}
-# Load the Python script and get a reference to the run_script function
-source_python("../Diffusion Model/gravity_model.py")
-```
-
-
-```{r}
-# Convert the df_shops data frame to a Python data frame
 df_shops_py <- r_to_py(df_shops)
 df_population_py <- r_to_py(df_population)
-```
-
-# calculation of flow
-```{r}
-flow <- hyman_model(0.4, 0.001,df_population_py, df_shops_py)
-```
-
-
-# Generating Outbreaks
-```{r}
-source_python("../Diffusion Model/gravity_model.py")
 ```
 
 ```{r}
 outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak"), scenario_id == investigation_scenario)
 ```
 
+### Calculate Flow of Goods
 ```{r}
-# Test if the input is a character (string)
-if (is.character(outbreak_data$list_outbreak_scenario_sizes)) {
-  list_outbreak_scenario_sizes <- as.integer( unlist(strsplit(outbreak_data$list_outbreak_scenario_sizes, ",")))
+empirical_mean_shopping_distance <- outbreak_data$empirical_mean_shopping_distance
+tolerance <- outbreak_data$tolerance
+```
+
+```{r}
+flow <- hyman_model(empirical_mean_shopping_distance, tolerance,df_population_py, df_shops_py)
+```
+
+### Generate Outbreaks for Scenario
+```{r}
+if (is.character(outbreak_data$outbreak_scenario_sizes)) {
+  list_outbreak_scenario_sizes <- as.integer( unlist(strsplit(outbreak_data$outbreak_scenario_sizes, ",")))
 } else {
-  list_outbreak_scenario_sizes <- as.integer(outbreak_data$list_outbreak_scenario_sizes)
+  list_outbreak_scenario_sizes <- as.integer(outbreak_data$outbreak_scenario_sizes)
 }
 
 no_of_trials_per_scenario = as.integer(outbreak_data$no_of_trials_per_scenario) #Hier könnte man auch noch eine Logik hinterlegen
 ```
 
-```{r}
-# Number of stores per chain
-chains <- df_shops %>%
-  group_by(chain) %>%
-  summarise(count = n())
-```
 
+```{r}
+unique_chains <- unique(df_shops$chain)
+```
 
 ```{r}
 # Create a list to store the outbreak data
 outbreak_list <- list()
 
 # Loop over each chain, outbreak scenario size, and trial number
-for (chain in unique(chains$chain)) {
+for (chain in unique_chains) {
   for (no_of_outbreak_cases in list_outbreak_scenario_sizes) {
     for (trial in seq_len(no_of_trials_per_scenario)) {
       
@@ -191,6 +180,7 @@ for (chain in unique(chains$chain)) {
 }
 ```
 
+
 ```{r}
 df_outbreak <- outbreak_list$`Chain 1_10_1`
 ```
@@ -199,98 +189,8 @@ df_outbreak <- outbreak_list$`Chain 1_10_1`
 
 ## Visualization / Plotting
 
-Assign colors to different chains
-
 ```{r}
-# Identify unique chains and generate a color palette
-unique_chains <- unique(df_shops$chain)
-
-# Generate a color palette avoiding red and blue
-all_colors <- brewer.pal(9, "Set1")  # This palette has distinct colors
-all_colors <- all_colors[!all_colors %in% c("#E41A1C", "#377EB8")] 
-chain_colors <- all_colors[1:length(unique_chains)]
-
-names(chain_colors) <- unique_chains
-```
-
-Assign breaks for the legend of the population
-
-
-Visualize
-```{r}
-# Create the main plot with population, stores, and outbreak cases
-p_main <- ggplot() +
-  # Plot the population data
-  geom_tile(
-    data = df_population,
-    aes(x = x_centroid, y = y_centroid, fill = population),
-    width = 0.1,
-    height = 0.1,
-    alpha = 0.8
-  ) +
-  scale_fill_gradient(
-    low = "white",
-    high = "cadetblue",
-    guide = "none"
-  ) +
-  
-  # Introduce a new scale for the shop chains
-  new_scale_fill() +
-  
-  # Plot the shops data
-  geom_point(
-    data = df_shops,
-    aes(x = store_x, y = store_y, fill = chain),
-    size = 3,
-    shape = 23,
-    alpha = 0.8
-  ) +
-  scale_fill_manual(values = chain_colors, name = "Shop Chain") +
-  
-  # Plot the outbreak data
-  geom_point(
-    data = df_outbreak,
-    aes(x = x_centroid , y = y_centroid),
-    color = "red",
-    size = 2,
-    shape = 21,
-    fill = "red",
-    alpha = 0.8
-  ) +
-  
-  # Adjust the x and y axis breaks to have lines every 100m
-  scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
-  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
-  
-  # Add labels and theme
-  labs(
-    title = sprintf("Visualization of Scenario %s", investigation_scenario),
-    x = "X Coordinate",
-    y = "Y Coordinate",
-    color = "Shop Chain"
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    aspect.ratio = 1,
-    panel.grid.minor = element_blank()
-  )
-
-# Create a custom legend for the population
-legend_df <- data.frame(
-  population = seq(min(df_population$population), max(df_population$population), length.out = 100)
-)
-p_legend <- ggplot(legend_df, aes(x = 1, y = population, fill = population)) +
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "cadetblue") +
-  scale_y_continuous(breaks = floor(seq(min(df_population$population), max(df_population$population), length.out = 5))) +  # Add labels to the legend
-  theme_minimal() +
-  labs(title = "", x = "", y = "") + 
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(),  # Remove x-axis
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank()) # Remove grid lines
-
-# Combine the main plot and the custom legend
-p_combined <- grid.arrange(p_main, p_legend, ncol = 2, widths = c(4, 1))
+visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak)
 ```
 
 
@@ -305,9 +205,6 @@ Observed number of cases in each subregion
 point_in_square <- function(px, py, x, y, delta) {
   return(px >= (x - delta) & px <= (x + delta) & py >= (y - delta) & py <= (y + delta))
 }
-
-# Define half the side length of a square
-delta <- 0.05  
 
 y <- numeric(nrow(df_population))
 for (i in 1:nrow(df_population)) {
