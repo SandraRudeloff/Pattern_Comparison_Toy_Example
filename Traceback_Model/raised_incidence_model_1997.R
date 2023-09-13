@@ -70,9 +70,6 @@ likelihood_function_minimize <- function(params, y, N, df_population, df_shops) 
 }
 
 # Standard Errors ----
-wrapper_likelihood_function <- function(params, y, N) {
-  return(likelihood_function_minimize(params, y, N))
-}
 ## Hessian 
 calculate_std_errors_Hessian <- function(result_optimization_DEoptim, y, N, df_population, df_shops){
   library(numDeriv)
