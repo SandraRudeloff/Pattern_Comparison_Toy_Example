@@ -1,6 +1,9 @@
 import random
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from gravity_model import get_production_potential
 
@@ -13,7 +16,8 @@ def get_stores(chain_name, all_stores):
 
 
 def get_flow_for_chain(sales_per_cell, selected_stores, total_flow):
-    # select all flows from cells where there is a store of the given chain inside
+    # select all flows from cells where there is a store of the given chain inside#
+
     selected_flow = total_flow[total_flow.index.isin(selected_stores.index)]
 
     # These flows are correct unless there is more than the one store of the given chain in any cell
@@ -79,7 +83,10 @@ def get_location_for_outbreak(cumulative_distribution):
 
 def create_outbreak_scenario(chain_name, no_of_cases, all_stores, total_flow):
     selected_stores = get_stores(chain_name, all_stores)
+
     sales_per_cell = get_production_potential(all_stores)
+
+    total_flow.index = total_flow.index.astype("int32")
 
     flow = get_flow_for_chain(sales_per_cell, selected_stores, total_flow)
 
@@ -132,3 +139,63 @@ def generate_outbreak(
     outbreak_scenario = get_xy(outbreak_scenario_cells, population_data)
 
     return outbreak_scenario
+
+
+def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
+    if df_shops.index.name != "cell_id":
+        df_shops.set_index("cell_id", inplace=True)
+
+    total_flow.index = total_flow.index.astype("int64")
+
+    filtered_shops = get_stores(selected_chain_name, df_shops)
+    sales_per_cell = get_production_potential(df_shops)
+
+    filtered_flow = get_flow_for_chain(sales_per_cell, filtered_shops, total_flow)
+
+    # Calculate the cumulative inflow to each cell
+    cumulative_inflow = filtered_flow.sum()
+
+    # Reshape the cumulative inflow data to a 2D array for plotting
+    n = int(np.sqrt(len(cumulative_inflow)))  # Assuming the grid is square
+    cumulative_inflow_matrix = np.array(cumulative_inflow).reshape((n, n))
+
+    # Plot the heatmap
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    sns.heatmap(
+        cumulative_inflow_matrix,
+        cmap="viridis",
+        cbar=False,
+        annot=True,
+        annot_kws={"size": 6},  # Set annotation size
+        fmt=".1f",  # Control number of decimal places
+        linewidths=0.5,
+        linecolor="gray",
+        ax=ax,
+    )
+
+    # Add the title
+    ax.set_title(f"Flows from stores of {selected_chain_name}")
+
+    # Reverse the y-axis to place (0,0) at the lower-left corner
+    ax.invert_yaxis()
+    # Set the square to be from 0 to 1 with ticks every 0.1 units
+    ax.set_xticks(np.arange(0, n + 1, n / 10))
+    ax.set_yticks(np.arange(0, n + 1, n / 10))
+    ax.set_xticklabels(np.round(np.linspace(0, 1, 11), 1))
+    ax.set_yticklabels(np.round(np.linspace(0, 1, 11), 1))
+
+    # Overlay the store locations
+    for _, row in filtered_shops.iterrows():
+        plt.scatter(
+            row["x"] * n, row["y"] * n, color="blue", s=100, marker="s"
+        )  # Adjust the scaling factor as needed
+
+    max_value = np.round(np.max(cumulative_inflow_matrix), 1)
+    intermediate_ticks = [np.round(max_value * x, 1) for x in [0.25, 0.5, 0.75]]
+
+    cbar = plt.colorbar(ax.collections[0], ax=ax)
+    cbar.set_ticks([0] + intermediate_ticks + [max_value])
+    cbar.set_label("Inflow Value")
+    plt.show()
+    return fig, ax

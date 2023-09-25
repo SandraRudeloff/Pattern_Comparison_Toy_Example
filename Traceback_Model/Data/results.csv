@@ -1,1 +1,5 @@
-"scenario_id","outbreak_id","chain_id","GLRT_statistic","p_value","decision","alpha","beta","likelihood_value"
+"scenario_id","outbreak_id","chain_id","alpha","beta","likelihood_null","likelihood_value","GLRT_statistic","p_value","decision"
+1,"Chain 1_5_1","Chain 1",5.66666662720433,0.00260025326267156,-19.97866136777,18.9315413828841,2.09423996977176,0.350947027788899,"Fail to reject the null hypothesis."
+1,"Chain 1_5_1","Chain 2",0.030436133949622,0.328347780032964,-19.97866136777,19.9769232098929,0.00347631575419882,0.998263351844465,"Fail to reject the null hypothesis."
+1,"Chain 2_5_1","Chain 1",0.0128620332766471,0.819092776897842,-19.97866136777,19.9771638013427,0.00299513285443709,0.998503554365826,"Fail to reject the null hypothesis."
+1,"Chain 2_5_1","Chain 2",6.90286585611902,0.0790792461737415,-19.97866136777,18.2029612250028,3.55140028553438,0.169364828418836,"Fail to reject the null hypothesis."

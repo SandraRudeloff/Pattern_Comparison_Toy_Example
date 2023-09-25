@@ -3,7 +3,6 @@ source("trace_outbreak.R")
 investigation_scenarios <- c(1)
 no_of_cells <- 100
 delta <- 0.05  # Define half the side length of a square
-set.seed(123)
 
 results_df <- data.frame(
   scenario_id = character(),

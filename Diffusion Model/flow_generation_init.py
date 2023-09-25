@@ -1,4 +1,7 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from gravity_model import hyman_model
 from outbreak_generation import *
@@ -39,11 +42,9 @@ if df_population.index.name != "cell_id":
     df_population.set_index("cell_id", inplace=True)
 
 total_flow = hyman_model(0.2, 0.001, df_population, df_shops)
+print(total_flow)
 total_flow.index = total_flow.index.astype(int)
 
+selected_chain = "Chain 1"
 
-selected_stores = get_stores("Chain 1", df_shops)
-sales_per_cell = get_production_potential(df_shops)
-
-
-flow_Chain_1 = get_flow_for_chain(sales_per_cell, selected_stores, total_flow)
+fig, ax = visualize_flow_for_chain(selected_chain, df_shops, total_flow)
