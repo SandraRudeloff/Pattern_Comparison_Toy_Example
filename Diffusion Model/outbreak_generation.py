@@ -4,6 +4,9 @@ import pandas as pd
 
 from gravity_model import get_production_potential
 
+# As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
+random.seed(123)
+
 
 def get_stores(chain_name, all_stores):
     return all_stores[all_stores["chain"] == chain_name]
@@ -114,14 +117,13 @@ def generate_outbreak(
 ):
     if shops_data.index.name != "cell_id":
         shops_data.set_index("cell_id", inplace=True)
+
     total_flow.index = total_flow.index.astype(int)
 
     if population_data.index.name != "cell_id":
         population_data.set_index("cell_id", inplace=True)
-    population_data.index = population_data.index.astype(int)
 
-    # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
-    # random.seed(3)
+    population_data.index = population_data.index.astype(int)
 
     outbreak_scenario_cells = create_outbreak_scenario(
         chain, no_of_outbreak_cases, shops_data, total_flow
