@@ -3,6 +3,9 @@ title: "Comparison Numerical Optimization Methods"
 author: "Sandra Rudeloff"
 date: "2023-08-28"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -54,26 +57,29 @@ library(DEoptim) # optimizer
 
 source("generate_population.R")
 source("generate_supermarkets.R")
-source("visualize_scenario.R")
+source("trace_outbreak.R")
 source("raised_incidence_model_1997.R")
 source_python("../Diffusion Model/gravity_model.py")
 source_python("../Diffusion Model/outbreak_generation.py")
 ```
 
 # Input Data
+
 ```{r}
-investigation_scenario <- 1
+investigation_scenario <- 7
 no_of_cells <- 100
 delta <- 0.05  # Define half the side length of a square
 set.seed(333)
 ```
 
 # Collect Variables
+
 All values are measured in km.
 
 ## Population Data
 
 number of people at risk in each subregion $N$
+
 ```{r}
 population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"),scenario_id == investigation_scenario) 
 ```
@@ -83,8 +89,8 @@ df_population <- generate_population(population_data, no_of_cells)
 df_population$cell_id <- as.numeric(row.names(df_population)) # assign cell_ids
 ```
 
-
 ## Shops Data
+
 ```{r}
 chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
 ```
@@ -105,6 +111,7 @@ for (current_chain_id in unique(chain_details$chain_id)) {
 ```
 
 Assign the correct cell_id to the stores
+
 ```{r}
 df_shops <- df_shops %>%
   rowwise() %>%
@@ -120,7 +127,9 @@ df_shops <- df_shops %>%
 ```
 
 ## Outbreak Data
+
 Convert the df_shops data frame to a Python data frame
+
 ```{r}
 df_shops_py <- r_to_py(df_shops)
 df_population_py <- r_to_py(df_population)
@@ -131,6 +140,7 @@ outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak"),
 ```
 
 ### Calculate Flow of Goods
+
 ```{r}
 empirical_mean_shopping_distance <- outbreak_data$empirical_mean_shopping_distance
 tolerance <- outbreak_data$tolerance
@@ -141,6 +151,7 @@ flow <- hyman_model(empirical_mean_shopping_distance, tolerance,df_population_py
 ```
 
 ### Generate Outbreaks for Scenario
+
 ```{r}
 if (is.character(outbreak_data$outbreak_scenario_sizes)) {
   list_outbreak_scenario_sizes <- as.integer( unlist(strsplit(outbreak_data$outbreak_scenario_sizes, ",")))
@@ -150,7 +161,6 @@ if (is.character(outbreak_data$outbreak_scenario_sizes)) {
 
 no_of_trials_per_scenario = as.integer(outbreak_data$no_of_trials_per_scenario) #Hier könnte man auch noch eine Logik hinterlegen
 ```
-
 
 ```{r}
 unique_chains <- unique(df_shops$chain)
@@ -177,18 +187,15 @@ for (chain in unique_chains) {  for (no_of_outbreak_cases in list_outbreak_scena
 }
 ```
 
-
 ```{r}
 df_outbreak <- outbreak_list$`Chain 1_10_1`
 ```
-
 
 ## Visualization / Plotting
 
 ```{r}
 visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak)
 ```
-
 
 # Model
 
@@ -208,13 +215,13 @@ Number of people at risk in each subregion
 N <- get_N(df_population)
 ```
 
-
 ## Optimize
-The max. distance that can occur in the toy example is 
-> compute_distance(0.05, 0.05, 0.95, 0.95)
-[1] 1.272792
 
-so any value for beta over 50 doesn't make any sense 
+The max. distance that can occur in the toy example is \>
+compute_distance(0.05, 0.05, 0.95, 0.95) [1] 1.272792
+
+so any value for beta over 50 doesn't make any sense
+
 ```{r}
 lower_bounds <- c(alpha = 0.001, beta = 0.0001)
 upper_bounds <- c(alpha = 5000, beta = 50) 
@@ -225,6 +232,7 @@ logLik_null <- -likelihood_function_minimize(c(0,0), y=y, N=N, df_population = d
 ```
 
 ### Deoptim
+
 #### Alternative Model
 
 ```{r}
@@ -233,6 +241,7 @@ print(result_alternative_DEoptim$optim$bestmem)
 ```
 
 #### Compare the nested Models
+
 ```{r}
 logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
 ```
@@ -259,26 +268,38 @@ if (p_value < 0.05) {
 }
 ```
 
-
 # Summary
+
 ## DeOptim
+
 ```{r}
 print(paste("alpha: ", result_alternative_DEoptim$optim$bestmem[1], " beta: ", result_alternative_DEoptim$optim$bestmem[2]))
 print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N, df_population = df_population, df_shops = df_shops)))
 ```
 
 # Standard error
+
 ```{r}
 z_value <- 1.96 # For a 95% confidence level
 ```
 
-## Hessian 
+## Hessian
+
 ```{r}
 std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
 ```
-standard error gives an idea of how much the estimated parameter is expected to vary from sample to sample.
 
-In your specific case, you're dealing with a likelihood function for which you've estimated parameters (alpha and beta). The Hessian matrix at the maximum likelihood estimates gives you an idea of how "curved" the likelihood function is at that point. The inverse of this Hessian matrix is related to the variances (and covariances) of your parameter estimates. Taking the square root of the diagonal elements gives you the standard errors, which tell you how much those estimates are likely to vary if you were to collect new data and re-estimate the parameters.
+standard error gives an idea of how much the estimated parameter is
+expected to vary from sample to sample.
+
+In your specific case, you're dealing with a likelihood function for
+which you've estimated parameters (alpha and beta). The Hessian matrix
+at the maximum likelihood estimates gives you an idea of how "curved"
+the likelihood function is at that point. The inverse of this Hessian
+matrix is related to the variances (and covariances) of your parameter
+estimates. Taking the square root of the diagonal elements gives you the
+standard errors, which tell you how much those estimates are likely to
+vary if you were to collect new data and re-estimate the parameters.
 
 ```{r}
 lower_bounds <- result_alternative_DEoptim$optim$bestmem - z_value * std_error_Hessian
@@ -286,19 +307,26 @@ upper_bounds <- result_alternative_DEoptim$optim$bestmem + z_value * std_error_H
 ```
 
 ## Monte Carlo
-mplementing Monte Carlo simulations to estimate standard errors involves generating multiple simulated datasets based on your fitted model, then refitting the model to each of these datasets to obtain a distribution of parameter estimates. The standard deviation of this distribution will give you the standard error for each parameter.
+
+mplementing Monte Carlo simulations to estimate standard errors involves
+generating multiple simulated datasets based on your fitted model, then
+refitting the model to each of these datasets to obtain a distribution
+of parameter estimates. The standard deviation of this distribution will
+give you the standard error for each parameter.
+
 ```{r}
 # Number of simulations
 n_simulations <- 10
 ```
-
 
 ```{r}
 std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
 ```
 
 # Confidence Intervals
-Calculate Confidence Intervals: Use the formula for a confidence interval, which is:
+
+Calculate Confidence Intervals: Use the formula for a confidence
+interval, which is:
 
 Confidence Interval = Parameter Estimate ± (Z-value × Standard Error)
 
@@ -307,4 +335,9 @@ z_value <- 1.96 # For a 95% confidence level
 lower_bounds <- result_alternative_DEoptim$optim$bestmem - z_value * std_error_MC
 upper_bounds <- result_alternative_DEoptim$optim$bestmem + z_value * std_error_MC
 ```
-Interpret the Results: The lower_bounds and upper_bounds vectors now contain the lower and upper bounds of the confidence intervals for each parameter. If these intervals are narrow, it indicates that you can be fairly confident about the estimated parameter values. If they are wide, it suggests that there is more uncertainty.
+
+Interpret the Results: The lower_bounds and upper_bounds vectors now
+contain the lower and upper bounds of the confidence intervals for each
+parameter. If these intervals are narrow, it indicates that you can be
+fairly confident about the estimated parameter values. If they are wide,
+it suggests that there is more uncertainty.
