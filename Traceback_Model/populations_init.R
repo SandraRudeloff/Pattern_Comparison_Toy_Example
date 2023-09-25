@@ -33,6 +33,6 @@ for (investigation_scenario in scenarios) {
                           "linear" = generate_linear_population(df_population, total_population, desired_gradient),
                           "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
                           "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
-                          )
+  )
   plot_and_save_population(df_population,investigation_scenario)
 }

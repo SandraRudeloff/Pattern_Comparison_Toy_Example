@@ -52,16 +52,16 @@ generate_population <-
     )
     
     return(df_population)
-}
+  }
 
 
 assign_remaining_population <- function(df_population, total_population) {
   remaining_population <- total_population - sum(df_population$population)
-
+  
   # Randomly assign the remaining population to some of the cells
   selected_cells <- sample(nrow(df_population), abs(remaining_population), replace = TRUE)
   df_population$population[selected_cells] <- df_population$population[selected_cells] + sign(remaining_population)
-
+  
   return(df_population)
 }
 
@@ -74,14 +74,14 @@ generate_uniform_population <- function(df_population, total_population) {
 # Random ----
 generate_random_population <- function(df_population, total_population) {
   proportions <- runif(nrow(df_population)) # generates random numbers following a uniform distribution
-
+  
   # Scale the proportions so that they sum up to the total population
   population <- total_population * proportions / sum(proportions)
-
+  
   df_population$population <- floor(population)
-
+  
   df_population <- assign_remaining_population(df_population, total_population)
-
+  
   return(df_population)
 }
 
@@ -89,12 +89,12 @@ generate_random_population <- function(df_population, total_population) {
 generate_linear_population <- function(df_population, total_population, desired_gradient) {
   # Calculate the raw population values (not yet scaled to the total population)
   raw_population <- exp(-df_population$x_centroid / desired_gradient)
-
+  
   # Scale the raw population values so that they sum up to the total population
   df_population$population <- round(total_population * raw_population / sum(raw_population))
-
+  
   df_population <- assign_remaining_population(df_population, total_population)
-
+  
   return(df_population)
 }
 
@@ -102,28 +102,28 @@ generate_linear_population <- function(df_population, total_population, desired_
 generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
-
+  
   # For each cluster...
   for (i in 1:num_clusters) {
     # Randomly select a center cell
     center_cell <- sample(1:nrow(df_population), 1)
     center_x <- df_population$x_centroid[center_cell]
     center_y <- df_population$y_centroid[center_cell]
-
+    
     # Calculate the distances from each cell to the center cell
     distances <- sqrt((df_population$x_centroid - center_x)^2 + (df_population$y_centroid - center_y)^2)
-
+    
     # Calculate the raw population values (not yet scaled to the total population)
     raw_population <- 1 / (1 + distances / desired_gradient) # 1 in denominator avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
-
+    
     # Scale the raw population values so that they sum up to the cluster's population
     cluster_population <- total_population / num_clusters # or vary between clusters
     population <- population + round(cluster_population * raw_population / sum(raw_population))
   }
-
+  
   df_population$population <- population
   df_population <- assign_remaining_population(df_population, total_population)
-
+  
   return(df_population)
 }
 
@@ -131,45 +131,45 @@ generate_radial_clusters_population <- function(df_population, total_population,
 generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
   # Initialize the population distribution
   population <- rep(0, no_of_cells)
-
+  
   # Randomly select a center cell for the main cluster
   main_cluster_cell <- sample(1:nrow(df_population), 1)
   main_cluster_x <- df_population$x_centroid[main_cluster_cell]
   main_cluster_y <- df_population$y_centroid[main_cluster_cell]
-
+  
   # Calculate the distances from each cell to the main cluster
   main_cluster_distances <- sqrt((df_population$x_centroid - main_cluster_x)^2 + (df_population$y_centroid - main_cluster_y)^2)
-
+  
   # Calculate the raw population values for the main cluster (not yet scaled to the total population)
   main_cluster_raw_population <- 1 / (1 + main_cluster_distances / desired_gradient) # 1 in denominator to avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
-
+  
   # Scale the raw population values for the main cluster so that they sum up to the main cluster's population
   main_cluster_population_percentage <- 0.6 - (num_clusters - 1) * 0.05
   main_cluster_population <- (total_population * main_cluster_population_percentage)
   population <- population + round(main_cluster_population * main_cluster_raw_population / sum(main_cluster_raw_population))
-
+  
   # For each small cluster...
   for (i in 1:(num_clusters - 1)) {
     # Randomly select a center cell for the small cluster
     small_cluster_cell <- sample(1:nrow(df_population), 1)
     small_cluster_x <- df_population$x_centroid[small_cluster_cell]
     small_cluster_y <- df_population$y_centroid[small_cluster_cell]
-
+    
     # Calculate the distances from each cell to the small cluster
     small_cluster_distances <- sqrt((df_population$x_centroid - small_cluster_x)^2 + (df_population$y_centroid - small_cluster_y)^2)
-
+    
     # Calculate the raw population values for the small cluster (not yet scaled to the total population)
     small_cluster_raw_population <- 1 / (1 + small_cluster_distances / desired_gradient) # 1 in denominator to avoid division by zero and to ensure that the raw population values are within the range of 0 to 1.
-
+    
     # Scale the raw population values for the small cluster so that they sum up to the small cluster's population
     small_cluster_population <- (total_population * (1 - main_cluster_population_percentage)) / (num_clusters - 1) # or vary between clusters
     population <- population + round(small_cluster_population * small_cluster_raw_population / sum(small_cluster_raw_population))
   }
-
+  
   df_population$population <- population
-
+  
   df_population <- assign_remaining_population(df_population, total_population)
-
+  
   return(df_population)
 }
 
