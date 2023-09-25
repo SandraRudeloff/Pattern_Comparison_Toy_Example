@@ -1,6 +1,16 @@
+library(reticulate) # connection to python scripts
+library(readxl)# Read Scenario Definition from Excel
+library(DEoptim) # optimizer
+library(RColorBrewer) #visualization with color set
+library(ggplot2)
+library(ggnewscale)
+
 source("generate_population.R")
 source("generate_supermarkets.R")
 source_python("../Diffusion Model/gravity_model.py")
+source_python("../Diffusion Model/outbreak_generation.py")
+set.seed(123)
+
 
 get_population <- function(investigation_scenario, no_of_cells){
   # number of people at risk in each subregion $N$ 
@@ -10,7 +20,7 @@ get_population <- function(investigation_scenario, no_of_cells){
   return(df_population)
 }
 
-get_shops <- function(investigation_scenario) {
+get_shops <- function(investigation_scenario, no_of_cells, df_population) {
   chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
   df_shops <- data.frame()
   
@@ -30,28 +40,28 @@ get_shops <- function(investigation_scenario) {
     rowwise() %>%
     mutate(
       cell_id = which(
-        (df_population$x_centroid - 0.05) <= store_x &
-          (df_population$x_centroid + 0.05) >= store_x &
-          (df_population$y_centroid - 0.05) <= store_y &
-          (df_population$y_centroid + 0.05) >= store_y
+        (df_population$x_centroid - 0.05) <= x &
+          (df_population$x_centroid + 0.05) >= x &
+          (df_population$y_centroid - 0.05) <= y &
+          (df_population$y_centroid + 0.05) >= y
       )
     ) %>%
     ungroup()
   return(df_shops)
 }
 
-get_outbreaks <- function(df_shops, df_population) {
+get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
   ## Outbreak Data
   # Convert the df_shops data frame to a Python data frame
   df_shops_py <- r_to_py(df_shops)
   df_population_py <- r_to_py(df_population)
-  outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreak"), scenario_id == investigation_scenario)
+  outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreaks"), scenario_id == investigation_scenario)
   
   ### Calculate Flow of Goods
   empirical_mean_shopping_distance <- outbreak_data$empirical_mean_shopping_distance
   tolerance <- outbreak_data$tolerance
   flow <- hyman_model(empirical_mean_shopping_distance, tolerance,df_population_py, df_shops_py)
-  
+  browser()
   ### Generate Outbreaks for Scenario
   if (is.character(outbreak_data$outbreak_scenario_sizes)) {
     list_outbreak_scenario_sizes <- as.integer( unlist(strsplit(outbreak_data$outbreak_scenario_sizes, ",")))
@@ -60,7 +70,7 @@ get_outbreaks <- function(df_shops, df_population) {
   }
   
   no_of_trials_per_scenario = as.integer(outbreak_data$no_of_trials_per_scenario) #Hier könnte man auch noch eine Logik hinterlegen
-
+  
   # Create a list to store the outbreak data
   outbreak_list <- list()
   
@@ -82,7 +92,7 @@ get_outbreaks <- function(df_shops, df_population) {
   return(outbreak_list)
 }
 
-visualize_scenario <- function(investigation_scenario, df_shops, df_population, df_outbreak){
+visualize_scenario <- function(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name){
   # Assign colors to different chains ---- 
   
   # Identify unique chains and generate a color palette
@@ -117,7 +127,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
     # Plot the shops data
     geom_point(
       data = df_shops,
-      aes(x = store_x, y = store_y, fill = chain),
+      aes(x = x, y = y, fill = chain),
       size = 3,
       shape = 23,
       alpha = 0.8
@@ -141,7 +151,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
     
     # Add labels and theme
     labs(
-      title = sprintf("Visualization of Scenario %s", investigation_scenario),
+      title = sprintf("Visualization of Scenario %s, Outbreak: %s", investigation_scenario, outbreak_name ),
       x = "X Coordinate",
       y = "Y Coordinate",
       color = "Shop Chain"
@@ -198,7 +208,11 @@ get_N <- function(df_population){
 ## Risk function for distance d from the source ----
 # Calculate the Risk Function for each Source and subregion
 risk_function <- function(d, alpha, beta) {
+  if (alpha == 0 & beta == 0) {
+    return(1)
+  } else {
   return(1 + alpha * exp(-(d/beta)^2))
+    }
 }
 
 ## Risk matrix ----
@@ -207,7 +221,7 @@ compute_risk_matrix <- function(df_population, df_shops, alpha, beta) {
   risk_matrix <- matrix(0, nrow(df_population), nrow(df_shops))
   for (i in 1:nrow(df_population)) {
     for (j in 1:nrow(df_shops)) {
-      d <- compute_distance(df_population$x_centroid[i], df_population$y_centroid[i], df_shops$store_x[j], df_shops$store_y[j])
+      d <- compute_distance(df_population$x_centroid[i], df_population$y_centroid[i], df_shops$x[j], df_shops$y[j])
       risk_matrix[i, j] <- risk_function(d, alpha, beta)
     }
   }
@@ -236,6 +250,7 @@ likelihood_function_minimize <- function(params, y, N, df_population, df_shops) 
   log_likelihood <- -sum(mu) + sum(y * log(mu)) # without y! because it does not do anything for the optimization
   
   if (is.nan(log_likelihood)) {
+    # the problem is here
     return(1e6)
   }
   return(-log_likelihood) # We return the negative likelihood because optimizers in R typically minimize
@@ -295,31 +310,35 @@ get_upper_bounds <- function(result_optimization_DEoptim,z_value, std_error){
   result_optimization_DEoptim$optim$bestmem + z_value * std_error
 }
 
-analyze_scenario <- function(investigation_scenario, no_of_cells, delta){
+analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results_df){
   # Collect Variables ----
   # All values are measured in km.
   df_population <- get_population(investigation_scenario, no_of_cells)
   # N stays the same for the whole investigation_scenario
   N <- get_N(df_population)
   
-  df_shops <- get_shops(investigation_scenario)
-  outbreak_list <- get_outbreaks(df_shops, df_population)
+  df_shops <- get_shops(investigation_scenario, no_of_cells,  df_population)
+  outbreak_list <- get_outbreaks(investigation_scenario, df_shops, df_population)
+  print(outbreak_list)
+
   
   # set boundaries for optimization
   lower_bounds <- c(alpha = 0.001, beta = 0.0001)
   upper_bounds <- c(alpha = 5000, beta = 50) 
-  
-  for (df_outbreak in outbreak_list) {
-    visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak)
     
+  for (outbreak_name in names(outbreak_list)) {
+    print(outbreak_name)  # This will print the name
+    df_outbreak = outbreak_list[[outbreak_name]]
+
+    visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name)
     y <- get_y(df_population, df_outbreak, delta)
+
     for (chain in unique(df_shops$chain)) {
       print(chain)
-      df_shops = df_shops[df_shops$chain == chain, ]
-      print(df_shops)
-      
-      logLik_null <- -likelihood_function_minimize(c(0,0), y=y, N=N, df_population = df_population, df_shops =df_shops)
-      result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = df_shops)
+      chain_shops = df_shops[df_shops$chain == chain, ]
+      print(chain_shops)
+      logLik_null <- -likelihood_function_minimize(c(0,0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
+      result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
       logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
       
       GLRT_statistic <- 2 * (logLik_alternative_DEoptim - logLik_null) #y! kürzt sich raus
@@ -337,26 +356,45 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta){
       # Decide on the hypothesis based on a significance level (e.g., 0.05)
       if (p_value < 0.05) {
         cat("Reject the null hypothesis in favor of the alternative.\n")
+        decision <- "Reject the null hypothesis in favor of the alternative."
       } else {
         cat("Fail to reject the null hypothesis.\n")
+        decision <- "Fail to reject the null hypothesis."
       }
       
       print(paste("alpha: ", result_alternative_DEoptim$optim$bestmem[1], " beta: ", result_alternative_DEoptim$optim$bestmem[2]))
-      print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N, df_population = df_population, df_shops = df_shops)))
+      print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N, df_population = df_population, df_shops = chain_shops)))
       
+      
+      new_row <- data.frame(
+        scenario_id = investigation_scenario,
+        outbreak_id = outbreak_name,
+        chain_id = chain,
+        alpha = result_alternative_DEoptim$optim$bestmem[1],
+        beta = result_alternative_DEoptim$optim$bestmem[2],
+        likelihood_null = logLik_null,
+        likelihood_value = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y=y, N=N, df_population = df_population, df_shops = chain_shops),
+        GLRT_statistic = GLRT_statistic,
+        p_value = p_value,
+        decision = decision,
+        stringsAsFactors = FALSE 
+      )
+      
+      results_df <- rbind(results_df, new_row)
       # Std. errors
-      z_value <- 1.96 # For a 95% confidence level
+      # z_value <- 1.96 # For a 95% confidence level
+      # 
+      # std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
+      # lower_bounds_Hessian <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
+      # upper_bounds_Hessian <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
       
-      std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
-      lower_bounds_Hessian <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
-      upper_bounds_Hessian <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
+      # n_simulations <- 10
+      # std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
+      # lower_bounds_MC <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_MC)
+      # upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
       
-      n_simulations <- 10
-      std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
-      lower_bounds_MC <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_MC)
-      upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
-      
-      }
+    }
   }
+  return(results_df)
 }
 
