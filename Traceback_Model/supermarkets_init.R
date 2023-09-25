@@ -7,32 +7,28 @@ no_of_cells <- 100
 
 for (investigation_scenario in scenarios) {
   # Read Data ----
-  total_population <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$total_population
-  population_type <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$population_type
+  chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
+  df_shops <- data.frame()
   
-  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" || population_type == "linear") {
-    desired_gradient <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$desired_gradient
-    # high values mean a large spreading # used for all radial type populations
+  # Loop through each chain in the specific scenario to create the final dataframe
+  for (current_chain_id in unique(chain_details$chain_id)) {
+    chain_data <- chain_details %>% 
+      filter(chain_id == current_chain_id)
+    
+    df_shops_current <- generate_shops(no_of_cells, chain_data)
+    df_shops_current$chain <- current_chain_id
+    
+    df_shops <- rbind(df_shops, df_shops_current)
   }
-  
-  if (population_type == "radial_clusters" || population_type ==  "main_and_small_clusters" ) {
-    num_clusters <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario == investigation_scenario)$num_clusters
-  }
-  
-  # calculate number of cells per row
-  cells_per_row <- sqrt(no_of_cells)
-  
-  # generate a sequence of coordinates for centroids and generate all combinations of these coordinates
-  centroid_coords <- seq(50, by = 100, length.out = cells_per_row)
-  df_population <- expand.grid(x_centroid = centroid_coords, y_centroid = centroid_coords)
-  
-  # generate population
-  df_population <- switch(population_type,
-                          "random" = generate_random_population(df_population, total_population),
-                          "uniform" = generate_uniform_population(df_population, total_population),
-                          "linear" = generate_linear_population(df_population, total_population, desired_gradient),
-                          "radial_clusters" = generate_radial_clusters_population(df_population, total_population, desired_gradient, num_clusters),
-                          "main_and_small_clusters" = generate_main_and_small_clusters_population(df_population, total_population, desired_gradient, num_clusters)
-  )
-  plot_population(df_population,investigation_scenario)
 }
+
+print(df_shops)
+
+
+field <- expand.grid(x = seq(0.05, 1, by = 0.1), y = seq(0.05, 1, by = 0.1))
+# Generate stores
+num_stores <- 10
+stores <- generate_uniform_shops( field, num_stores)
+plot_stores(field, stores)
+print(stores)
+print(served_cells(field, stores))
