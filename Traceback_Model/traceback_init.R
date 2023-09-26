@@ -3,7 +3,7 @@ source("trace_outbreak.R")
 
 investigation_scenarios <- c(1)
 no_of_cells <- 100
-delta <- 0.05 # Define half the side length of a square
+delta <- 0.05 # half the side length of one square
 
 traceback_results_df <- data.frame(
   scenario_id = character(),
@@ -37,5 +37,3 @@ for (scenario in investigation_scenarios) {
 
 results_list <- list("traceback results" = traceback_results_df, "flow results" = flow_results_df)
 write_xlsx(results_list, "Data/Results/results.xlsx")
-
-
