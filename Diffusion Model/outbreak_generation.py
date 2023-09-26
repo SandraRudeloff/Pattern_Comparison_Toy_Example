@@ -161,15 +161,19 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
 
     # Plot the heatmap
     fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_aspect("equal", "box")
+    custom_cubehelix = sns.cubehelix_palette(
+        gamma=0.5, start=2, rot=0, as_cmap=True, dark=0.3
+    )
 
     sns.heatmap(
         cumulative_inflow_matrix,
-        cmap="viridis",
+        cmap=custom_cubehelix,
         cbar=False,
         annot=True,
-        annot_kws={"size": 6},  # Set annotation size
+        annot_kws={"size": 4},  # Set annotation size
         fmt=".1f",  # Control number of decimal places
-        linewidths=0.5,
+        linewidths=0.2,
         linecolor="gray",
         ax=ax,
     )
@@ -180,16 +184,11 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
     # Reverse the y-axis to place (0,0) at the lower-left corner
     ax.invert_yaxis()
     # Set the square to be from 0 to 1 with ticks every 0.1 units
-    ax.set_xticks(np.arange(0, n + 1, n / 10))
-    ax.set_yticks(np.arange(0, n + 1, n / 10))
-    ax.set_xticklabels(np.round(np.linspace(0, 1, 11), 1))
-    ax.set_yticklabels(np.round(np.linspace(0, 1, 11), 1))
-
-    # Overlay the store locations
-    for _, row in filtered_shops.iterrows():
-        plt.scatter(
-            row["x"] * n, row["y"] * n, color="blue", s=100, marker="s"
-        )  # Adjust the scaling factor as needed
+    ax.set_xticks(np.arange(0, n + 1, n / 5))
+    ax.set_yticks(np.arange(0, n + 1, n / 5))
+    ax.set_xticklabels(np.round(np.linspace(0, 1, 6), 1))
+    ax.set_yticklabels(np.round(np.linspace(0, 1, 6), 1))
+    ax.tick_params(axis="both", which="major", labelsize=4, colors="darkgray")
 
     max_value = np.round(np.max(cumulative_inflow_matrix), 1)
     intermediate_ticks = [np.round(max_value * x, 1) for x in [0.25, 0.5, 0.75]]
@@ -197,5 +196,9 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
     cbar = plt.colorbar(ax.collections[0], ax=ax)
     cbar.set_ticks([0] + intermediate_ticks + [max_value])
     cbar.set_label("Inflow Value")
+
+    # Overlay the store locations
+    for _, row in filtered_shops.iterrows():
+        plt.scatter(row["x"] * n, row["y"] * n, color="black", s=20, marker="D")
     plt.show()
     return fig, ax
