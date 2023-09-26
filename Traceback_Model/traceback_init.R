@@ -2,7 +2,7 @@ source("trace_outbreak.R")
 
 investigation_scenarios <- c(1)
 no_of_cells <- 100
-delta <- 0.05  # Define half the side length of a square
+delta <- 0.05 # Define half the side length of a square
 
 results_df <- data.frame(
   scenario_id = character(),
@@ -14,7 +14,7 @@ results_df <- data.frame(
   alpha = numeric(),
   beta = numeric(),
   likelihood_value = numeric(),
-  stringsAsFactors = FALSE #tells R not to convert character vectors to factors when creating a data frame
+  stringsAsFactors = FALSE # tells R not to convert character vectors to factors when creating a data frame
 )
 
 for (scenario in investigation_scenarios) {
