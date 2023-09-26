@@ -228,4 +228,8 @@ def hyman_model(
 
     flow_end = add_indices(flow, production_potential, consumption_potential)
 
-    return flow_end
+    return (
+        flow_end,
+        beta_best,
+        tol_best[tol_best.index(min(tol_best))],
+    )

@@ -3,6 +3,7 @@ library(readxl) # Read Scenario Definition from Excel
 library(DEoptim) # optimizer
 library(RColorBrewer) # visualization with color set
 library(ggplot2)
+library(grid)
 library(ggnewscale)
 
 source("generate_population.R")
@@ -60,7 +61,11 @@ get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
   ### Calculate Flow of Goods
   empirical_mean_shopping_distance <- outbreak_data$empirical_mean_shopping_distance
   tolerance <- outbreak_data$tolerance
-  flow <- hyman_model(empirical_mean_shopping_distance, tolerance, df_population_py, df_shops_py)
+
+  list_hyman_results <- hyman_model(empirical_mean_shopping_distance, tolerance, df_population_py, df_shops_py)
+  flow <- list_hyman_results[[1]]
+  beta_best <- list_hyman_results[[2]]
+  tolerance_best <- list_hyman_results[[3]]
 
   flow_py <- r_to_py(flow)
 
@@ -78,7 +83,7 @@ get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
 
   # Loop over each chain, outbreak scenario size, and trial number
   for (chain in unique(df_shops$chain)) {
-    visualize_flow_for_chain(chain, df_shops_py, flow_py)
+    visualize_flow_for_chain(investigation_scenario, chain, df_shops_py, flow_py)
     for (no_of_outbreak_cases in list_outbreak_scenario_sizes) {
       for (trial in seq_len(no_of_trials_per_scenario)) {
         # Generate the outbreak data
@@ -92,8 +97,9 @@ get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
       }
     }
   }
-  return(outbreak_list)
+  return(list(outbreak_list = outbreak_list, beta_best = beta_best, tolerance_best = tolerance_best))
 }
+
 
 visualize_scenario <- function(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name) {
   # Identify unique chains and generate a color palette
@@ -152,7 +158,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
 
     # Add labels and theme
     labs(
-      title = sprintf("Visualization of Scenario %s, Outbreak: %s", investigation_scenario, outbreak_name),
+      title = sprintf("Visualization of Scenario: %s, Outbreak: %s", investigation_scenario, outbreak_name),
       x = "X Coordinate",
       y = "Y Coordinate",
       color = "Shop Chain"
@@ -179,9 +185,23 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
       panel.grid.major = element_blank(), panel.grid.minor = element_blank()
     ) # Remove grid lines
 
-  # Combine the main plot and the custom legend
-  p_combined <- grid.arrange(p_main, p_legend, ncol = 2, widths = c(4, 1))
-  return(p_combined)
+  df_shops$sales <- round(df_shops$sales, 2)
+
+  table_grob_shops <- arrangeGrob( textGrob("Shops", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_shops[, c("chain", "x", "y", "sales", "cell_id")], rows = NULL), nrow = 2, heights = c(0.3, 4.7))
+  table_grob_outbreak <- arrangeGrob(textGrob("Outbreak Cases", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_outbreak), nrow = 2,heights = c(0.3, 4.7))
+
+  top_row <- arrangeGrob(p_main, p_legend, ncol = 2, widths = c(4, 0.5))
+  bottom_row <- arrangeGrob(table_grob_shops, table_grob_outbreak, ncol = 2, widths = c(2, 2))
+  
+  p_combined <- grid.arrange(top_row, bottom_row, nrow = 2, heights = c(5, 2))
+  
+  
+  if (!dir.exists(paste0("Data/Results/Scenario_",investigation_scenario ))) {
+    dir.create(paste0("Data/Results/Scenario_",investigation_scenario))
+  }
+  
+  plot_filename <- paste0("Data/Results/Scenario_", investigation_scenario, "/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".png")
+  ggsave(plot_filename, plot = p_combined, width = 10, height = 8)
 }
 
 # Helper functions ----
@@ -310,7 +330,7 @@ get_upper_bounds <- function(result_optimization_DEoptim, z_value, std_error) {
   result_optimization_DEoptim$optim$bestmem + z_value * std_error
 }
 
-analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results_df) {
+analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceback_results_df, flow_results_df) {
   # Collect Variables ----
   # All values are measured in km.
   df_population <- get_population(investigation_scenario, no_of_cells)
@@ -318,10 +338,19 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results
   N <- get_N(df_population)
 
   df_shops <- get_shops(investigation_scenario, no_of_cells, df_population)
-  outbreak_list <- get_outbreaks(investigation_scenario, df_shops, df_population)
-  print(outbreak_list)
+  list_outbreak_data <- get_outbreaks(investigation_scenario, df_shops, df_population)
+  outbreak_list <- list_outbreak_data$outbreak_list
+  beta_best <- list_outbreak_data$beta_best
+  tolerance_best <- list_outbreak_data$tolerance_best
 
+  new_row_flow_results <- data.frame(
+    scenario_id = investigation_scenario,
+    beta_best = beta_best,
+    tolerance_best = tolerance_best,
+    stringsAsFactors = FALSE
+  )
 
+  flow_results_df <- rbind(flow_results_df, new_row_flow_results)
   # set boundaries for optimization
   lower_bounds <- c(alpha = 0.001, beta = 0.0001)
   upper_bounds <- c(alpha = 5000, beta = 50)
@@ -333,9 +362,8 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results
     y <- get_y(df_population, df_outbreak, delta)
 
     for (chain in unique(df_shops$chain)) {
-      print(chain)
+
       chain_shops <- df_shops[df_shops$chain == chain, ]
-      print(chain_shops)
       logLik_null <- -likelihood_function_minimize(c(0, 0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
       result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
       logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
@@ -347,39 +375,30 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results
 
       p_value <- 1 - pchisq(GLRT_statistic, df)
 
-      # Print the results
-      print(paste("GLRT statistic:", GLRT_statistic))
-      print(paste("Degrees of freedom:", df))
-      print(paste("P-value:", p_value))
 
       # Decide on the hypothesis based on a significance level (e.g., 0.05)
       if (p_value < 0.05) {
-        cat("Reject the null hypothesis in favor of the alternative.\n")
         decision <- "Reject the null hypothesis in favor of the alternative."
       } else {
-        cat("Fail to reject the null hypothesis.\n")
         decision <- "Fail to reject the null hypothesis."
       }
 
-      print(paste("alpha: ", result_alternative_DEoptim$optim$bestmem[1], " beta: ", result_alternative_DEoptim$optim$bestmem[2]))
-      print(paste("likelihood value: ", likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops)))
-
-
-      new_row <- data.frame(
+      new_row_traceback_results <- data.frame(
         scenario_id = investigation_scenario,
         outbreak_id = outbreak_name,
-        chain_id = chain,
+        traced_chain = chain,
         alpha = result_alternative_DEoptim$optim$bestmem[1],
         beta = result_alternative_DEoptim$optim$bestmem[2],
         likelihood_null = logLik_null,
-        likelihood_value = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops),
+        likelihood_alternative = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops),
         GLRT_statistic = GLRT_statistic,
         p_value = p_value,
         decision = decision,
         stringsAsFactors = FALSE
       )
 
-      results_df <- rbind(results_df, new_row)
+      traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
+
       # Std. errors
       # z_value <- 1.96 # For a 95% confidence level
       #
@@ -393,5 +412,5 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, results
       # upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
     }
   }
-  return(results_df)
+  return(list(traceback_results = traceback_results_df, flow_results = flow_results_df))
 }

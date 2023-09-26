@@ -1,3 +1,4 @@
+import os
 import random
 
 import matplotlib.pyplot as plt
@@ -141,7 +142,9 @@ def generate_outbreak(
     return outbreak_scenario
 
 
-def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
+def visualize_flow_for_chain(
+    investigation_scenario, selected_chain_name, df_shops, total_flow
+):
     if df_shops.index.name != "cell_id":
         df_shops.set_index("cell_id", inplace=True)
 
@@ -171,7 +174,7 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
         cmap=custom_cubehelix,
         cbar=False,
         annot=True,
-        annot_kws={"size": 4},  # Set annotation size
+        annot_kws={"size": 5},  # Set annotation size
         fmt=".1f",  # Control number of decimal places
         linewidths=0.2,
         linecolor="gray",
@@ -188,7 +191,7 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
     ax.set_yticks(np.arange(0, n + 1, n / 5))
     ax.set_xticklabels(np.round(np.linspace(0, 1, 6), 1))
     ax.set_yticklabels(np.round(np.linspace(0, 1, 6), 1))
-    ax.tick_params(axis="both", which="major", labelsize=4, colors="darkgray")
+    ax.tick_params(axis="both", which="major", labelsize=6, colors="darkgray")
 
     max_value = np.round(np.max(cumulative_inflow_matrix), 1)
     intermediate_ticks = [np.round(max_value * x, 1) for x in [0.25, 0.5, 0.75]]
@@ -199,6 +202,20 @@ def visualize_flow_for_chain(selected_chain_name, df_shops, total_flow):
 
     # Overlay the store locations
     for _, row in filtered_shops.iterrows():
-        plt.scatter(row["x"] * n, row["y"] * n, color="black", s=20, marker="D")
-    plt.show()
+        plt.scatter(row["x"] * n, row["y"] * n, color="black", s=35, marker="D")
+    investigation_scenario = int(investigation_scenario)
+    # Create the directory if it doesn't exist
+    directory_path = (
+        f"../Traceback_Model/Data/Results/Scenario_{investigation_scenario}"
+    )
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+
+    # Save the plot
+    plot_filename = os.path.join(
+        directory_path,
+        f"Scenario_{investigation_scenario}_Flows_from_stores_of_{selected_chain_name}.png",
+    )
+    fig.savefig(plot_filename)
+
     return fig, ax
