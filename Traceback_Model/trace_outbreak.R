@@ -320,28 +320,86 @@ get_upper_bounds <- function(result_optimization_DEoptim, z_value, std_error) {
   result_optimization_DEoptim$optim$bestmem + z_value * std_error
 }
 
+# Get all data needed for a scenario
+get_scenario_data <- function(investigation_scenario, no_of_cells) {
+  df_population <- get_population(investigation_scenario, no_of_cells)
+  df_shops <- get_shops(investigation_scenario, no_of_cells, df_population)
+  list_outbreak_data <- get_outbreaks(investigation_scenario, df_shops, df_population)
+
+  return(list(df_population = df_population, df_shops = df_shops, list_outbreak_data = list_outbreak_data))
+}
+
+run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, delta, lower_bounds, upper_bounds) {
+  y <- get_y(df_population, df_outbreak, delta)
+  N <- get_N(df_population) # number of people at risk in each subregion
+
+  new_row_traceback_results <- data.frame()
+
+  for (chain in unique(df_shops$chain)) {
+    chain_shops <- df_shops[df_shops$chain == chain, ]
+    logLik_null <- -likelihood_function_minimize(c(0, 0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
+    result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
+    logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
+
+    GLRT_statistic <- 2 * (logLik_alternative_DEoptim - logLik_null) # y! kürzt sich raus
+
+    # Determine the degrees of freedom (difference in number of parameters between the two models)
+    df <- 2 # alpha and beta are the additional parameters in the alternative model
+
+    p_value <- 1 - pchisq(GLRT_statistic, df)
+
+
+    # Decide on the hypothesis based on a significance level (e.g., 0.05)
+    if (p_value < 0.05) {
+      decision <- "Reject the null hypothesis in favor of the alternative."
+    } else {
+      decision <- "Fail to reject the null hypothesis."
+    }
+
+    new_row_traceback_results <- data.frame(
+      scenario_id = investigation_scenario,
+      outbreak_id = outbreak_name,
+      traced_chain = chain,
+      alpha = result_alternative_DEoptim$optim$bestmem[1],
+      beta = result_alternative_DEoptim$optim$bestmem[2],
+      likelihood_null = logLik_null,
+      likelihood_alternative = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops),
+      GLRT_statistic = GLRT_statistic,
+      p_value = p_value,
+      decision = decision,
+      stringsAsFactors = FALSE
+    )
+
+    traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
+
+    # Std. errors ----
+    # z_value <- 1.96 # For a 95% confidence level
+    #
+    # std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
+    # lower_bounds_Hessian <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
+    # upper_bounds_Hessian <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
+
+    # n_simulations <- 10
+    # std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
+    # lower_bounds_MC <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_MC)
+    # upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
+  }
+
+  return(traceback_results_df)
+}
+
+
 # Main traceback function ----
 analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceback_results_df, flow_results_df) {
   # Collect Variables ----
   # All values are measured in km.
-  df_population <- get_population(investigation_scenario, no_of_cells)
-  N <- get_N(df_population) # number of people at risk in each subregion
+  scenario_data <- get_scenario_data(investigation_scenario, no_of_cells)
+  df_population <- scenario_data$df_population
 
-  df_shops <- get_shops(investigation_scenario, no_of_cells, df_population)
+  df_shops <- scenario_data$df_shops
 
-  list_outbreak_data <- get_outbreaks(investigation_scenario, df_shops, df_population)
+  list_outbreak_data <- scenario_data$list_outbreak_data
   outbreak_list <- list_outbreak_data$outbreak_list
-  beta_best <- list_outbreak_data$beta_best
-  tolerance_best <- list_outbreak_data$tolerance_best
-
-  new_row_flow_results <- data.frame(
-    scenario_id = investigation_scenario,
-    beta_best = beta_best,
-    tolerance_best = tolerance_best,
-    stringsAsFactors = FALSE
-  )
-
-  flow_results_df <- rbind(flow_results_df, new_row_flow_results)
 
   # set boundaries for optimization
   lower_bounds <- c(alpha = 0.001, beta = 0.0001)
@@ -349,59 +407,18 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceba
 
   for (outbreak_name in names(outbreak_list)) {
     df_outbreak <- outbreak_list[[outbreak_name]]
-
     visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name)
-    y <- get_y(df_population, df_outbreak, delta)
-
-    for (chain in unique(df_shops$chain)) {
-      chain_shops <- df_shops[df_shops$chain == chain, ]
-      logLik_null <- -likelihood_function_minimize(c(0, 0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
-      result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
-      logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
-
-      GLRT_statistic <- 2 * (logLik_alternative_DEoptim - logLik_null) # y! kürzt sich raus
-
-      # Determine the degrees of freedom (difference in number of parameters between the two models)
-      df <- 2 # alpha and beta are the additional parameters in the alternative model
-
-      p_value <- 1 - pchisq(GLRT_statistic, df)
-
-
-      # Decide on the hypothesis based on a significance level (e.g., 0.05)
-      if (p_value < 0.05) {
-        decision <- "Reject the null hypothesis in favor of the alternative."
-      } else {
-        decision <- "Fail to reject the null hypothesis."
-      }
-
-      new_row_traceback_results <- data.frame(
-        scenario_id = investigation_scenario,
-        outbreak_id = outbreak_name,
-        traced_chain = chain,
-        alpha = result_alternative_DEoptim$optim$bestmem[1],
-        beta = result_alternative_DEoptim$optim$bestmem[2],
-        likelihood_null = logLik_null,
-        likelihood_alternative = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops),
-        GLRT_statistic = GLRT_statistic,
-        p_value = p_value,
-        decision = decision,
-        stringsAsFactors = FALSE
-      )
-
-      traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
-
-      # Std. errors ----
-      # z_value <- 1.96 # For a 95% confidence level
-      #
-      # std_error_Hessian <- calculate_std_errors_Hessian(result_alternative_DEoptim, y = y, N=N, df_population, df_shops)
-      # lower_bounds_Hessian <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
-      # upper_bounds_Hessian <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_Hessian)
-
-      # n_simulations <- 10
-      # std_error_MC <-  calculate_std_errors_MC(result_alternative_DEoptim, n_simulations, df_population, df_shops)
-      # lower_bounds_MC <- get_lower_bounds(result_alternative_DEoptim, z_value, std_error_MC)
-      # upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
-    }
+    new_row_traceback_results <- run_outbreak_analysis(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, delta, lower_bounds, upper_bounds)
+    traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
   }
+
+  new_row_flow_results <- data.frame(
+    scenario_id = investigation_scenario,
+    beta_best = list_outbreak_data$beta_best,
+    tolerance_best = list_outbreak_data$tolerance_best,
+    stringsAsFactors = FALSE
+  )
+
+  flow_results_df <- rbind(flow_results_df, new_row_flow_results)
   return(list(traceback_results = traceback_results_df, flow_results = flow_results_df))
 }
