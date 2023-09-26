@@ -4,6 +4,6 @@
 .Ruserdata
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
+__pycache__
 *.py[cod]
 Diffusion Model/__pycache__/gravity_model.cpython-39.pyc
