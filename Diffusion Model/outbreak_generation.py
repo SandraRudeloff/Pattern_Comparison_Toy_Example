@@ -17,8 +17,7 @@ def get_stores(chain_name, all_stores):
 
 
 def get_flow_for_chain(sales_per_cell, selected_stores, total_flow):
-    # select all flows from cells where there is a store of the given chain inside#
-
+    # select all flows from cells where there is a store of the given chain inside
     selected_flow = total_flow[total_flow.index.isin(selected_stores.index)]
 
     # These flows are correct unless there is more than the one store of the given chain in any cell
@@ -158,7 +157,6 @@ def visualize_flow_for_chain(
     # Calculate the cumulative inflow to each cell
     cumulative_inflow = filtered_flow.sum()
 
-    # Reshape the cumulative inflow data to a 2D array for plotting
     n = int(np.sqrt(len(cumulative_inflow)))  # Assuming the grid is square
     cumulative_inflow_matrix = np.array(cumulative_inflow).reshape((n, n))
 
@@ -181,12 +179,11 @@ def visualize_flow_for_chain(
         ax=ax,
     )
 
-    # Add the title
     ax.set_title(f"Flows from stores of {selected_chain_name}")
 
     # Reverse the y-axis to place (0,0) at the lower-left corner
     ax.invert_yaxis()
-    # Set the square to be from 0 to 1 with ticks every 0.1 units
+
     ax.set_xticks(np.arange(0, n + 1, n / 5))
     ax.set_yticks(np.arange(0, n + 1, n / 5))
     ax.set_xticklabels(np.round(np.linspace(0, 1, 6), 1))
@@ -204,14 +201,14 @@ def visualize_flow_for_chain(
     for _, row in filtered_shops.iterrows():
         plt.scatter(row["x"] * n, row["y"] * n, color="black", s=35, marker="D")
     investigation_scenario = int(investigation_scenario)
-    # Create the directory if it doesn't exist
+
+    # Save the plot
     directory_path = (
         f"../Traceback_Model/Data/Results/Scenario_{investigation_scenario}"
     )
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
 
-    # Save the plot
     plot_filename = os.path.join(
         directory_path,
         f"Scenario_{investigation_scenario}_Flows_from_stores_of_{selected_chain_name}.png",

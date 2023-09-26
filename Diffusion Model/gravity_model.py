@@ -18,10 +18,8 @@ def get_distance_matrix(production, consumption):
         production_centroids,
         consumption_centroids,
     )
-    # in-cell distance shouldn't be zero
-    arr_distance[arr_distance == 0] = (
-        128 / (45 * math.pi)
-    ) * 0.05  # \frac{128}{45*\pi}r
+    # in-cell distance shouldn't be zero and is set according to Czuber (1884)
+    arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 0.05
 
     return arr_distance
 
@@ -85,7 +83,7 @@ def hyman_model(
     empirical_mean_shopping_distance, tolerance, population_data, shops_data
 ):
     """calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods.
-        Hardcoded here is the exponential distance model
+        The exponential distance model is hardcoded
 
     Args:
         empirical_mean_shopping_distance (float): used to compare the modeled mean distance
