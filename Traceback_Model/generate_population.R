@@ -1,6 +1,7 @@
 library(ggplot2)
 library(plotly)
 library(gridExtra)
+set.seed(123) # Set seed for reproducibility
 
 generate_population <-
   function(population_data, no_of_cells) {
