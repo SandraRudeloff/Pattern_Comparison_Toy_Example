@@ -50,7 +50,7 @@ get_shops <- function(investigation_scenario, no_of_cells, df_population) {
     chain_data <- chain_details %>%
       filter(chain_id == current_chain)
 
-    df_shops_current <- generate_shops(no_of_cells, chain_data)
+    df_shops_current <- generate_shops(no_of_cells, chain_data, df_population)
     df_shops_current$chain <- current_chain
 
     df_shops <- rbind(df_shops, df_shops_current)
@@ -340,7 +340,6 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     logLik_null <- -likelihood_function_minimize(c(0, 0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
     result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
     logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
-
     GLRT_statistic <- 2 * (logLik_alternative_DEoptim - logLik_null) # y! kürzt sich raus
 
     # Determine the degrees of freedom (difference in number of parameters between the two models)

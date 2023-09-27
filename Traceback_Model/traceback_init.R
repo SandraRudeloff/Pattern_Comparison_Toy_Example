@@ -1,7 +1,7 @@
 library(writexl)
 source("trace_outbreak.R")
 
-investigation_scenarios <- c(1)
+investigation_scenarios <- c(7)
 no_of_cells <- 100
 delta <- 0.05 # half the side length of one square
 
@@ -33,7 +33,6 @@ for (scenario in investigation_scenarios) {
   traceback_results_df <- rbind(traceback_results_df, current_results$traceback_results)
   flow_results_df <- rbind(flow_results_df, current_results$flow_results)
 }
-
 
 results_list <- list("traceback results" = traceback_results_df, "flow results" = flow_results_df)
 write_xlsx(results_list, "Data/Results/results.xlsx")
