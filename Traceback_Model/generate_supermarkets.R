@@ -2,24 +2,31 @@ library(dplyr)
 library(ggplot2)
 set.seed(123) # Set seed for reproducibility
 
-generate_shops <- function(no_of_cells, chain_data) {
+generate_shops <- function(no_of_cells, chain_data, df_population) {
   cells_per_row <- sqrt(no_of_cells)
   field <- expand.grid(x = seq(0.05, 1, by = 0.1), y = seq(0.05, 1, by = 0.1))
-
   num_stores <- chain_data$num_stores
   spatial_distribution <- chain_data$spatial_distribution
 
   total_sales <- chain_data$total_sales
   sales_distribution <- chain_data$sales_distribution
-
+  
+  if (sales_distribution == "popBased") {
+    # used for all radial type populations
+    desired_gradient <- chain_data$desired_gradient
+    # high values mean a large spreading
+  }
+  
   df_shops <- switch(spatial_distribution,
     "random" = generate_random_shops(field, num_stores),
-    "uniform" = generate_uniform_shops(field, num_stores)
+    "uniform" = generate_uniform_shops(field, num_stores), 
+    "popBased" = generate_populationBased_shops(field, num_stores, df_population)
   )
 
   df_shops$sales <- switch(sales_distribution,
     "random" = generate_random_sales(num_stores, total_sales),
-    "uniform" = generate_uniform_sales(num_stores, total_sales)
+    "uniform" = generate_uniform_sales(num_stores, total_sales), 
+    "popBased" = generate_populationBased_sales(df_shops, df_population, total_sales, desired_gradient)
   )
 
   return(df_shops)
@@ -43,6 +50,36 @@ generate_random_sales <- function(num_stores, total_sales) {
   sales[num_stores] <- total_sales - sum(sales[-num_stores])
 
   return(sales)
+}
+
+# Function to calculate surrounding population for each store
+get_sales_potential <- function(store_cell, df_population, desired_gradient) {
+  # Calculate the distances from each cell to the store
+  distances <- sqrt((df_population$x_centroid - store_cell[1])^2 + (df_population$y_centroid - store_cell[2])^2)
+  
+  # Calculate the raw sales potential values (not yet scaled to the total sales)
+  raw_sales_potential <- 1 / (1 + distances / desired_gradient)
+  
+  # Scale the raw sales potential values by the population in each cell
+  scaled_sales_potential <- sum(raw_sales_potential * df_population$population)
+  
+  return(scaled_sales_potential)
+}
+
+generate_populationBased_sales <- function(df_stores, df_population, total_sales, desired_gradient) {
+  # Calculate sales potential for each store
+  df_stores$sales_potential = apply(df_stores, 1, function(row) get_sales_potential(row, df_population, desired_gradient))
+  
+  # Normalize this to get sales distribution ratios
+  df_stores$sales_ratio = df_stores$sales_potential / sum(df_stores$sales_potential)
+  
+  # Distribute total sales
+  df_stores$sales = round(df_stores$sales_ratio * total_sales, 2)
+  
+  # Adjust the last element to make sure the sum is exactly total_sales
+  df_stores$sales[nrow(df_stores)] = total_sales - sum(df_stores$sales[-nrow(df_stores)])
+  
+  return( df_stores$sales)
 }
 
 #  Spatial Distibution ----
@@ -98,19 +135,27 @@ generate_uniform_shops <- function(field, num_shops) {
   return(final_shops)
 }
 
-#
-# field <- expand.grid(x = seq(0.05, 1, by = 0.1), y = seq(0.05, 1, by = 0.1))
-# # Generate stores
-# num_stores <- 15
-# stores <- generate_uniform_shops( field, num_stores)
-# plot_stores(field, stores)
-# print(stores)
-# print(served_cells(field, stores))
-
 
 ## Single Chain Population based ----
 generate_populationBased_shops <- function(field, num_shops, df_population) {
-
+  # Normalize the population to get weights
+  total_population <- sum(df_population$population)
+  weights <- df_population$population / total_population
+  
+  # Randomly sample cell_ids based on weights
+  selected_cells <- sample(df_population$cell_id, size = num_shops, replace = TRUE, prob = weights)
+  
+  # Create a data frame to store the distribution of shops
+  df_shops <- data.frame(cell_id = integer(), x_centroid = numeric(), y_centroid = numeric())
+  
+  # Populate the df_shops with the coordinates of selected cells
+  for (cell in selected_cells) {
+    selected_row <- df_population[df_population$cell_id == cell, ]
+    df_shops <- rbind(df_shops, selected_row[, c( "x_centroid", "y_centroid")])
+  }
+  colnames(df_shops) <- c("x", "y")
+  
+  return(df_shops)
 }
 
 # Two clustered ----
