@@ -83,17 +83,14 @@ def get_location_for_outbreak(cumulative_distribution):
 
 def create_outbreak_scenario(chain_name, no_of_cases, all_stores, total_flow):
     selected_stores = get_stores(chain_name, all_stores)
-
     sales_per_cell = get_production_potential(all_stores)
 
     total_flow.index = total_flow.index.astype("int32")
-
     flow = get_flow_for_chain(sales_per_cell, selected_stores, total_flow)
 
     cumulative_distribution = get_cumulative_distribution(flow)
 
     outbreak_scenario = []
-
     outbreak_scenario = [
         get_location_for_outbreak(cumulative_distribution) for _ in range(no_of_cases)
     ]

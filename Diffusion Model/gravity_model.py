@@ -92,6 +92,11 @@ def hyman_model(
     Returns:
         flow(numpy.ndarray): _description_
     """
+    shops_data.set_index("cell_id", inplace=True)
+    shops_data.index = shops_data.index.astype(int)
+    population_data.set_index("cell_id", inplace=True)
+    population_data.index = population_data.index.astype(int)
+
     beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
     count_loops = 0
@@ -105,11 +110,9 @@ def hyman_model(
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
 
-    production_potential.reset_index(inplace=True)
     production_potential = production_potential.merge(
         population_data.drop(columns=["population"]), on="cell_id", how="left"
     )
-    production_potential.set_index("cell_id", inplace=True)
 
     dist_matrix = get_distance_matrix(production_potential, consumption_potential)
 
