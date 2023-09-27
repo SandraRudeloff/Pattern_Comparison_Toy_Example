@@ -95,6 +95,7 @@ generate_outbreaks_for_chain <- function(chain, list_outbreak_scenario_sizes, no
 get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
   df_shops_py <- r_to_py(df_shops)
   df_population_py <- r_to_py(df_population)
+
   outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreaks"), scenario_id == investigation_scenario)
   if (is.character(outbreak_data$outbreak_scenario_sizes)) {
     list_outbreak_scenario_sizes <- as.integer(unlist(strsplit(outbreak_data$outbreak_scenario_sizes, ",")))
@@ -340,14 +341,14 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     logLik_null <- -likelihood_function_minimize(c(0, 0), y = y, N = N, df_population = df_population, df_shops = chain_shops)
     result_alternative_DEoptim <- DEoptim(fn = likelihood_function_minimize, lower = lower_bounds, upper = upper_bounds, y = y, N = N, df_population = df_population, df_shops = chain_shops, control = list(trace = FALSE))
     logLik_alternative_DEoptim <- -result_alternative_DEoptim$optim$bestval
+
     GLRT_statistic <- 2 * (logLik_alternative_DEoptim - logLik_null) # y! kürzt sich raus
+    #-likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops)
 
     # Determine the degrees of freedom (difference in number of parameters between the two models)
     df <- 2 # alpha and beta are the additional parameters in the alternative model
 
     p_value <- 1 - pchisq(GLRT_statistic, df)
-
-
     # Decide on the hypothesis based on a significance level (e.g., 0.05)
     if (p_value < 0.05) {
       decision <- "Reject the null hypothesis in favor of the alternative."
@@ -362,7 +363,7 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
       alpha = result_alternative_DEoptim$optim$bestmem[1],
       beta = result_alternative_DEoptim$optim$bestmem[2],
       likelihood_null = logLik_null,
-      likelihood_alternative = likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops),
+      likelihood_alternative = logLik_alternative_DEoptim,
       GLRT_statistic = GLRT_statistic,
       p_value = p_value,
       decision = decision,
