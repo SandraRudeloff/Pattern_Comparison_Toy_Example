@@ -50,7 +50,6 @@ generate_population <-
         no_of_cells
       )
     )
-
     return(df_population)
   }
 
@@ -100,10 +99,8 @@ generate_linear_population <- function(df_population, total_population, desired_
 
 # Radial Clusters ----
 generate_radial_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
-  # Initialize the population distribution
   population <- rep(0, no_of_cells)
 
-  # For each cluster...
   for (i in 1:num_clusters) {
     # Randomly select a center cell
     center_cell <- sample(1:nrow(df_population), 1)
@@ -129,7 +126,6 @@ generate_radial_clusters_population <- function(df_population, total_population,
 
 # Radial main and small clusters ----
 generate_main_and_small_clusters_population <- function(df_population, total_population, desired_gradient, num_clusters, no_of_cells) {
-  # Initialize the population distribution
   population <- rep(0, no_of_cells)
 
   # Randomly select a center cell for the main cluster
@@ -209,5 +205,4 @@ plot_and_save_population <- function(df_population, investigation_scenario) {
   p_combined <- grid.arrange(p, p_legend, ncol = 2, widths = c(4, 1))
 
   ggsave(file_name, p_combined, width = 8, height = 5)
-  plot(p_combined)
 }
