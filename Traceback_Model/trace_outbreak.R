@@ -44,16 +44,32 @@ get_population <- function(investigation_scenario, no_of_cells) {
 get_shops <- function(investigation_scenario, no_of_cells, df_population) {
   chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
   df_shops <- data.frame()
-
+  
+  unique_chains <- unique(chain_details$chain_id)
   # loop through each chain and generate shops
-  for (current_chain in unique(chain_details$chain_id)) {
+  for (current_chain in unique_chains) {
     chain_data <- chain_details %>%
       filter(chain_id == current_chain)
-
-    df_shops_current <- generate_shops(no_of_cells, chain_data, df_population)
+    
+    is_first_chain <- (current_chain == unique_chains[1])
+    
+    
+    
+    # Generate shops
+    if (is_first_chain) {
+      df_shops_current <- generate_shops(no_of_cells, chain_data, df_population, is_first_chain = TRUE)
+    } else {
+      df_shops_current <- generate_shops(no_of_cells, chain_data, df_population, is_first_chain = FALSE, df_shops_chain1 = df_shops_first_chain)
+    }
+    
+    
     df_shops_current$chain <- current_chain
-
     df_shops <- rbind(df_shops, df_shops_current)
+    
+    # Save the shops of the first chain for later use
+    if (is_first_chain) {
+      df_shops_first_chain <- df_shops_current
+    }
   }
 
   # Assign cell_id to the stores
@@ -206,6 +222,8 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
     ) # Remove grid lines
 
   df_shops$sales <- round(df_shops$sales, 2)
+  df_shops$x <- round(df_shops$x, 4)
+  df_shops$y <- round(df_shops$y, 4)
 
   table_grob_shops <- arrangeGrob(textGrob("Shops", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_shops[, c("chain", "x", "y", "sales", "cell_id")], rows = NULL), nrow = 2, heights = c(0.3, 4.7))
   table_grob_outbreak <- arrangeGrob(textGrob("Outbreak Cases", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_outbreak), nrow = 2, heights = c(0.3, 4.7))
