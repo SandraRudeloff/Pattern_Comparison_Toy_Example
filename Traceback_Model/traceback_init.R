@@ -3,7 +3,7 @@ source("trace_outbreak.R")
 options(warn = 2)
 options(digits = 4)
 
-investigation_scenarios <- 15:16
+investigation_scenarios <- 1:17
 no_of_cells <- 100
 delta <- 0.05 # half the side length of one square
 
