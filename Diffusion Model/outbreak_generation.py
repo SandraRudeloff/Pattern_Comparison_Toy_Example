@@ -32,7 +32,10 @@ def get_flow_for_chain(sales_per_cell, selected_stores, total_flow):
     )
 
     selected_flow = selected_flow.merge(
-        selected_stores["sales"], left_index=True, right_index=True, how="left",
+        selected_stores["sales"],
+        left_index=True,
+        right_index=True,
+        how="left",
     )
 
     adjusted_rows = (
@@ -110,7 +113,11 @@ def get_xy(outbreak_scenario, population_data):
 
 
 def generate_outbreak(
-    chain, no_of_outbreak_cases, total_flow, shops_data, population_data,
+    chain,
+    no_of_outbreak_cases,
+    total_flow,
+    shops_data,
+    population_data,
 ):
     if shops_data.index.name != "cell_id":
         shops_data.set_index("cell_id", inplace=True)
@@ -204,5 +211,6 @@ def visualize_flow_for_chain(
         f"Scenario_{investigation_scenario}_Flows_from_stores_of_{selected_chain_name}.png",
     )
     fig.savefig(plot_filename)
+    plt.close(fig)
 
     return fig, ax
