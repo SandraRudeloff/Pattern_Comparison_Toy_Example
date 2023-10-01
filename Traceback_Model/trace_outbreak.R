@@ -84,7 +84,8 @@ get_shops <- function(investigation_scenario, no_of_cells, df_population) {
       )
     ) %>%
     ungroup()
-
+  
+  df_shops$cell_id <- as.numeric(df_shops$cell_id)
   return(df_shops)
 }
 
@@ -231,8 +232,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
   top_row <- arrangeGrob(p_main, p_legend, ncol = 2, widths = c(4, 0.5))
   bottom_row <- arrangeGrob(table_grob_shops, table_grob_outbreak, ncol = 2, widths = c(2, 2))
 
-  p_combined <- grid.arrange(top_row, bottom_row, nrow = 2, heights = c(5, 2))
-
+  p_combined <- arrangeGrob(top_row, bottom_row, nrow = 2, heights = c(5, 2))
 
   if (!dir.exists(paste0("Data/Results/Scenario_", investigation_scenario))) {
     dir.create(paste0("Data/Results/Scenario_", investigation_scenario))
@@ -352,7 +352,7 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
   y <- get_y(df_population, df_outbreak, delta)
   N <- get_N(df_population) # number of people at risk in each subregion
 
-  new_row_traceback_results <- data.frame()
+  all_chains_result <- data.frame()
 
   for (chain in unique(df_shops$chain)) {
     chain_shops <- df_shops[df_shops$chain == chain, ]
@@ -373,13 +373,12 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     } else {
       decision <- "Fail to reject the null hypothesis."
     }
-
-    new_row_traceback_results <- data.frame(
+    new_row_chain_result <- data.frame(
       scenario_id = investigation_scenario,
       outbreak_id = outbreak_name,
       traced_chain = chain,
-      alpha = result_alternative_DEoptim$optim$bestmem[1],
-      beta = result_alternative_DEoptim$optim$bestmem[2],
+      alpha = unname(result_alternative_DEoptim$optim$bestmem[1]),
+      beta = unname(result_alternative_DEoptim$optim$bestmem[2]),
       likelihood_null = logLik_null,
       likelihood_alternative = logLik_alternative_DEoptim,
       GLRT_statistic = GLRT_statistic,
@@ -387,8 +386,8 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
       decision = decision,
       stringsAsFactors = FALSE
     )
-
-    traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
+    
+    all_chains_result <- rbind(all_chains_result, new_row_chain_result)
 
     # Std. errors ----
     # z_value <- 1.96 # For a 95% confidence level
@@ -403,12 +402,26 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     # upper_bounds_MC <- get_upper_bounds(result_alternative_DEoptim, z_value, std_error_MC)
   }
 
-  return(traceback_results_df)
+  return(all_chains_result)
 }
 
 
 # Main traceback function ----
-analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceback_results_df, flow_results_df) {
+analyze_scenario <- function(investigation_scenario, no_of_cells, delta) {
+  scenario_results <- data.frame(
+    scenario_id = character(),
+    outbreak_id = character(),
+    traced_chain = character(),
+    GLRT_statistic = numeric(),
+    p_value = numeric(),
+    decision = character(),
+    alpha = numeric(),
+    beta = numeric(),
+    likelihood_alternative = numeric(),
+    beta_best = numeric(),
+    tolerance_best = numeric(),
+    stringsAsFactors = FALSE # tells R not to convert character vectors to factors when creating a data frame
+  )
   # Collect Variables ----
   # All values are measured in km.
   scenario_data <- get_scenario_data(investigation_scenario, no_of_cells)
@@ -424,10 +437,13 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceba
   upper_bounds <- c(alpha = 5000, beta = 50)
 
   for (outbreak_name in names(outbreak_list)) {
+
     df_outbreak <- outbreak_list[[outbreak_name]]
+    
     visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name)
+
     new_row_traceback_results <- run_outbreak_analysis(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, delta, lower_bounds, upper_bounds)
-    traceback_results_df <- rbind(traceback_results_df, new_row_traceback_results)
+    scenario_results <- rbind(scenario_results, new_row_traceback_results)
   }
 
   new_row_flow_results <- data.frame(
@@ -437,6 +453,5 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta, traceba
     stringsAsFactors = FALSE
   )
 
-  flow_results_df <- rbind(flow_results_df, new_row_flow_results)
-  return(list(traceback_results = traceback_results_df, flow_results = flow_results_df))
+  return(list(traceback_results = scenario_results, flow_results = new_row_flow_results))
 }

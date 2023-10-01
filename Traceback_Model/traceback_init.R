@@ -3,7 +3,7 @@ source("trace_outbreak.R")
 options(warn = 2)
 options(digits = 4)
 
-investigation_scenarios <- 1:12
+investigation_scenarios <- 15:16
 no_of_cells <- 100
 delta <- 0.05 # half the side length of one square
 
@@ -31,7 +31,7 @@ flow_results_df <- data.frame(
 
 for (scenario in investigation_scenarios) {
   print(scenario)
-  current_results <- analyze_scenario(scenario, no_of_cells, delta, traceback_results_df, flow_results_df)
+  current_results <- analyze_scenario(scenario, no_of_cells, delta)
   traceback_results_df <- rbind(traceback_results_df, current_results$traceback_results)
   flow_results_df <- rbind(flow_results_df, current_results$flow_results)
 }
