@@ -16,6 +16,9 @@ source_python("../Diffusion Model/outbreak_generation.py")
 
 set.seed(123)
 
+path_to_scenarios = "./Input_Data/scenarios_to_test_code.xlsx"
+path_to_write_results = "Results/scenarios_to_test_code/"
+
 # Helper functions ----
 # function to check if a point is within a square centered at (x, y) with side length 2*half_side_length
 point_in_square <- function(px, py, x, y, half_side_length) {
@@ -39,14 +42,14 @@ get_N <- function(df_population) {
 }
 
 get_population <- function(investigation_scenario, no_of_cells) {
-  population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario_id == investigation_scenario)
+  population_data <- subset(read_excel(path_to_scenarios, sheet = "Population"), scenario_id == investigation_scenario)
   df_population <- generate_population(population_data, no_of_cells)
   df_population$cell_id <- as.numeric(row.names(df_population))
   return(df_population)
 }
 
 get_shops <- function(investigation_scenario, no_of_cells, df_population) {
-  chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
+  chain_details <- subset(read_excel(path_to_scenarios, sheet = "Chain_Details"), scenario_id == investigation_scenario)
   df_shops <- data.frame()
 
   unique_chains <- unique(chain_details$chain_id)
@@ -113,7 +116,7 @@ get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
   df_shops_py <- r_to_py(df_shops)
   df_population_py <- r_to_py(df_population)
 
-  outbreak_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Outbreaks"), scenario_id == investigation_scenario)
+  outbreak_data <- subset(read_excel(path_to_scenarios, sheet = "Outbreaks"), scenario_id == investigation_scenario)
   if (is.character(outbreak_data$outbreak_scenario_sizes)) {
     list_outbreak_scenario_sizes <- as.integer(unlist(strsplit(outbreak_data$outbreak_scenario_sizes, ",")))
   } else {
@@ -292,8 +295,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
       )
     )
   )
-
-  html_file <- paste0("Results/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".html")
+  html_file <- paste0(path_to_write_results ,"Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".html")
   save_html(html, file = html_file)
 }
 

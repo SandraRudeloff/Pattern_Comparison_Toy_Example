@@ -1,11 +1,13 @@
 library(writexl)
 source("trace_outbreak.R")
 options(warn = 2)
-options(digits = 4)
+options(digits = 15)
 
-investigation_scenarios <- 1:17
+path_to_write_results = "Results/scenarios_to_test_code/"
+investigation_scenarios <- 15:16
+
 no_of_cells <- 100
-half_side_length <- 0.05 # half the side length of one square
+half_side_length <- 0.05 # half the side length of one square cell
 
 traceback_results_df <- data.frame(
   scenario_id = character(),
@@ -37,4 +39,5 @@ for (scenario in investigation_scenarios) {
 }
 
 results_list <- list("traceback results" = traceback_results_df, "flow results" = flow_results_df)
-write_xlsx(results_list, "Results/results.xlsx")
+scenarios_str <- paste(investigation_scenarios[1], investigation_scenarios[length(investigation_scenarios)], sep = "_")
+write_xlsx(results_list, paste0(path_to_write_results, "results_", scenarios_str, ".xlsx"))
