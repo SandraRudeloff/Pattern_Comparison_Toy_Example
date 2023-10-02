@@ -1,7 +1,5 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from gravity_model import hyman_model
 from outbreak_generation import *
@@ -25,7 +23,7 @@ shops_data = {
     "x": [0.05, 0.85, 0.05, 0.35, 0.65, 0.15],
     "y": [0.35, 0.75, 0.55, 0.15, 0.65, 0.45],
     "sales": [333.0] * 6,
-    "chain": ["Chain 1", "Chain 1", "Chain 1", "Chain 2", "Chain 2", "Chain 2"],
+    "chain": ["Chain 1", "Chain 1", "Chain 1", "Chain 1", "Chain 1", "Chain 1"],
     "cell_id": [31, 79, 51, 14, 67, 42],
 }
 
@@ -42,9 +40,11 @@ if df_population.index.name != "cell_id":
     df_population.set_index("cell_id", inplace=True)
 
 total_flow = hyman_model(0.2, 0.001, df_population, df_shops)
-print(total_flow)
-total_flow.index = total_flow.index.astype(int)
+
+flow = total_flow[0]
+if flow.index.name != "cell_id":
+    flow.set_index("cell_id", inplace=True)
 
 selected_chain = "Chain 1"
 
-fig, ax = visualize_flow_for_chain(selected_chain, df_shops, total_flow)
+fig, ax = visualize_flow_for_chain(1, selected_chain, df_shops, flow)
