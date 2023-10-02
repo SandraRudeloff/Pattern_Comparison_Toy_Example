@@ -1,32 +1,35 @@
 library(reticulate) # connection to python scripts
 library(readxl) # Read Scenario Definition from Excel
 library(DEoptim) # optimizer
-library(RColorBrewer) # visualization with color set
+# Packages for visualization
+library(RColorBrewer)
 library(ggplot2)
 library(grid)
 library(ggnewscale)
+library(htmltools)
+library(kableExtra)
 
 source("generate_population.R")
 source("generate_supermarkets.R")
 source_python("../Diffusion Model/gravity_model.py")
 source_python("../Diffusion Model/outbreak_generation.py")
+
 set.seed(123)
 
 # Helper functions ----
-# function to check if a point is within a square centered at (x, y) with side length 2*delta
-point_in_square <- function(px, py, x, y, delta) {
-  return(px >= (x - delta) & px <= (x + delta) & py >= (y - delta) & py <= (y + delta))
+# function to check if a point is within a square centered at (x, y) with side length 2*half_side_length
+point_in_square <- function(px, py, x, y, half_side_length) {
+  return(px >= (x - half_side_length) & px <= (x + half_side_length) & py >= (y - half_side_length) & py <= (y + half_side_length))
 }
 
-# Compute distance between two points
 compute_distance <- function(x1, y1, x2, y2) {
   return(sqrt((x1 - x2)^2 + (y1 - y2)^2))
 }
 
-get_y <- function(df_population, df_outbreak, delta) {
+get_y <- function(df_population, df_outbreak, half_side_length) {
   y <- numeric(nrow(df_population))
   for (i in 1:nrow(df_population)) {
-    y[i] <- sum(point_in_square(df_outbreak$x_centroid, df_outbreak$y_centroid, df_population$x_centroid[i], df_population$y_centroid[i], delta))
+    y[i] <- sum(point_in_square(df_outbreak$x_centroid, df_outbreak$y_centroid, df_population$x_centroid[i], df_population$y_centroid[i], half_side_length))
   }
   return(y)
 }
@@ -34,6 +37,7 @@ get_y <- function(df_population, df_outbreak, delta) {
 get_N <- function(df_population) {
   return(df_population$population)
 }
+
 get_population <- function(investigation_scenario, no_of_cells) {
   population_data <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Population"), scenario_id == investigation_scenario)
   df_population <- generate_population(population_data, no_of_cells)
@@ -44,29 +48,25 @@ get_population <- function(investigation_scenario, no_of_cells) {
 get_shops <- function(investigation_scenario, no_of_cells, df_population) {
   chain_details <- subset(read_excel("./Data/scenarios.xlsx", sheet = "Chain_Details"), scenario_id == investigation_scenario)
   df_shops <- data.frame()
-  
+
   unique_chains <- unique(chain_details$chain_id)
   # loop through each chain and generate shops
   for (current_chain in unique_chains) {
     chain_data <- chain_details %>%
       filter(chain_id == current_chain)
-    
+
     is_first_chain <- (current_chain == unique_chains[1])
-    
-    
-    
+
     # Generate shops
     if (is_first_chain) {
       df_shops_current <- generate_shops(no_of_cells, chain_data, df_population, is_first_chain = TRUE)
     } else {
       df_shops_current <- generate_shops(no_of_cells, chain_data, df_population, is_first_chain = FALSE, df_shops_chain1 = df_shops_first_chain)
     }
-    
-    
+
     df_shops_current$chain <- current_chain
     df_shops <- rbind(df_shops, df_shops_current)
-    
-    # Save the shops of the first chain for later use
+
     if (is_first_chain) {
       df_shops_first_chain <- df_shops_current
     }
@@ -84,7 +84,7 @@ get_shops <- function(investigation_scenario, no_of_cells, df_population) {
       )
     ) %>%
     ungroup()
-  
+
   df_shops$cell_id <- as.numeric(df_shops$cell_id)
   return(df_shops)
 }
@@ -192,10 +192,10 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
     # Adjust the x and y axis breaks to have lines every 100m
     scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
     scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+    ggtitle(sprintf("Visualization of Scenario: %s\nOutbreak: %s", investigation_scenario, outbreak_name)) +
 
     # Add labels and theme
     labs(
-      title = sprintf("Visualization of Scenario: %s, Outbreak: %s", investigation_scenario, outbreak_name),
       x = "X Coordinate",
       y = "Y Coordinate",
       color = "Shop Chain"
@@ -204,7 +204,8 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
     theme(
       legend.position = "bottom",
       aspect.ratio = 1,
-      panel.grid.minor = element_blank()
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(hjust = 0.5)
     )
 
   # Create a custom legend for the population
@@ -222,24 +223,78 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
       panel.grid.major = element_blank(), panel.grid.minor = element_blank()
     ) # Remove grid lines
 
+  df_shops <- df_shops[, c("cell_id", "x", "y", "chain", "sales")]
   df_shops$sales <- round(df_shops$sales, 2)
   df_shops$x <- round(df_shops$x, 4)
   df_shops$y <- round(df_shops$y, 4)
 
-  table_grob_shops <- arrangeGrob(textGrob("Shops", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_shops[, c("chain", "x", "y", "sales", "cell_id")], rows = NULL), nrow = 2, heights = c(0.3, 4.7))
-  table_grob_outbreak <- arrangeGrob(textGrob("Outbreak Cases", gp = gpar(fontsize = 12, fontface = "bold")), tableGrob(df_outbreak), nrow = 2, heights = c(0.3, 4.7))
+  top_row <- arrangeGrob(p_main, p_legend, ncol = 2, widths = c(4.2, 0.8))
 
-  top_row <- arrangeGrob(p_main, p_legend, ncol = 2, widths = c(4, 0.5))
-  bottom_row <- arrangeGrob(table_grob_shops, table_grob_outbreak, ncol = 2, widths = c(2, 2))
+  temp_plot <- tempfile(fileext = ".png")
+  ggsave(temp_plot, plot = top_row, width = 5, height = 4)
+  plot_tag <- tags$img(src = temp_plot)
 
-  p_combined <- arrangeGrob(top_row, bottom_row, nrow = 2, heights = c(5, 2))
+  div_shops <- tags$div(
+    id = "shopsDiv",
+    HTML(as.character(kable(df_shops)))
+  )
 
-  if (!dir.exists(paste0("Data/Results/Scenario_", investigation_scenario))) {
-    dir.create(paste0("Data/Results/Scenario_", investigation_scenario))
-  }
+  div_outbreak <- tags$div(
+    id = "outbreakDiv",
+    HTML(as.character(kable(df_outbreak)))
+  )
 
-  plot_filename <- paste0("Data/Results/Scenario_", investigation_scenario, "/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".png")
-  ggsave(plot_filename, plot = p_combined, width = 10, height = 8)
+  # Combine everything into one HTML document
+  html <- tagList(
+    tags$head(
+      tags$style(HTML("
+      #container {
+        display: flex;
+        justify-content: center;
+        width: 100%
+      }
+      #shopsDiv, #outbreakDiv {
+        width: 45%;
+        overflow-x: visible;
+      }
+      #shopsDiv {
+        margin-right: 20px;
+      }
+      table {
+      min-width: 100%;
+      table-layout: auto;
+      border-collapse: collapse;
+      border: 2px solid darkgray
+      }
+      td, th {
+      padding: 8px;
+      white-space: nowrap;
+      border: 1px solid lightgray;
+      text-align: center;
+      }
+      th {
+      background-color: #f2f2f2;
+    }
+    "))
+    ),
+    tags$body(
+      plot_tag,
+      tags$div(
+        id = "container",
+        tags$div(
+          tags$h2("Shops"),
+          div_shops
+        ),
+        tags$div(
+          tags$h2("Outbreak Cases"),
+          div_outbreak
+        )
+      )
+    )
+  )
+
+  html_file <- paste0("Results/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".html")
+  save_html(html, file = html_file)
 }
 
 # Raised Incidence Calculation ----
@@ -348,8 +403,8 @@ get_scenario_data <- function(investigation_scenario, no_of_cells) {
   return(list(df_population = df_population, df_shops = df_shops, list_outbreak_data = list_outbreak_data))
 }
 
-run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, delta, lower_bounds, upper_bounds) {
-  y <- get_y(df_population, df_outbreak, delta)
+run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, half_side_length, lower_bounds, upper_bounds) {
+  y <- get_y(df_population, df_outbreak, half_side_length)
   N <- get_N(df_population) # number of people at risk in each subregion
 
   all_chains_result <- data.frame()
@@ -367,8 +422,10 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     df <- 2 # alpha and beta are the additional parameters in the alternative model
 
     p_value <- 1 - pchisq(GLRT_statistic, df)
+
     # Decide on the hypothesis based on a significance level (e.g., 0.05)
-    if (p_value < 0.05) {
+    significance_level <- 0.05
+    if (p_value < significance_level) {
       decision <- "Reject the null hypothesis in favor of the alternative."
     } else {
       decision <- "Fail to reject the null hypothesis."
@@ -386,7 +443,7 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
       decision = decision,
       stringsAsFactors = FALSE
     )
-    
+
     all_chains_result <- rbind(all_chains_result, new_row_chain_result)
 
     # Std. errors ----
@@ -407,7 +464,7 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
 
 
 # Main traceback function ----
-analyze_scenario <- function(investigation_scenario, no_of_cells, delta) {
+analyze_scenario <- function(investigation_scenario, no_of_cells, half_side_length) {
   scenario_results <- data.frame(
     scenario_id = character(),
     outbreak_id = character(),
@@ -437,19 +494,18 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, delta) {
   upper_bounds <- c(alpha = 5000, beta = 50)
 
   for (outbreak_name in names(outbreak_list)) {
-
     df_outbreak <- outbreak_list[[outbreak_name]]
-    
+
     visualize_scenario(investigation_scenario, df_shops, df_population, df_outbreak, outbreak_name)
 
-    new_row_traceback_results <- run_outbreak_analysis(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, delta, lower_bounds, upper_bounds)
+    new_row_traceback_results <- run_outbreak_analysis(investigation_scenario, outbreak_name, df_outbreak, df_population, df_shops, half_side_length, lower_bounds, upper_bounds)
     scenario_results <- rbind(scenario_results, new_row_traceback_results)
   }
 
   new_row_flow_results <- data.frame(
     scenario_id = investigation_scenario,
     beta_best = list_outbreak_data$beta_best,
-    tolerance_best = list_outbreak_data$tolerance_best,
+    tolerance_best = formatC(list_outbreak_data$tolerance_best, format = "f", digits = 5),
     stringsAsFactors = FALSE
   )
 
