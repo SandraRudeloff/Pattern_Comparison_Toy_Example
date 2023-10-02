@@ -15,8 +15,6 @@ population_data = {
 # Create the DataFrame
 df_population = pd.DataFrame(population_data)
 
-# Display the DataFrame
-print(df_population)
 
 # Create the data
 shops_data = {
@@ -30,14 +28,15 @@ shops_data = {
 # Create the DataFrame
 df_shops = pd.DataFrame(shops_data)
 
-# Display the DataFrame
-print(df_shops)
-
 if df_shops.index.name != "cell_id":
     df_shops.set_index("cell_id", inplace=True)
 
 if df_population.index.name != "cell_id":
     df_population.set_index("cell_id", inplace=True)
+
+# Display the DataFrame
+print(df_shops)
+print(df_population)
 
 total_flow = hyman_model(0.2, 0.001, df_population, df_shops)
 
