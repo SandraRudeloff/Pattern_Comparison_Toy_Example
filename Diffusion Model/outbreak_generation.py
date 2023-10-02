@@ -32,10 +32,7 @@ def get_flow_for_chain(sales_per_cell, selected_stores, total_flow):
     )
 
     selected_flow = selected_flow.merge(
-        selected_stores["sales"],
-        left_index=True,
-        right_index=True,
-        how="left",
+        selected_stores["sales"], left_index=True, right_index=True, how="left",
     )
 
     adjusted_rows = (
@@ -113,11 +110,7 @@ def get_xy(outbreak_scenario, population_data):
 
 
 def generate_outbreak(
-    chain,
-    no_of_outbreak_cases,
-    total_flow,
-    shops_data,
-    population_data,
+    chain, no_of_outbreak_cases, total_flow, shops_data, population_data,
 ):
     if shops_data.index.name != "cell_id":
         shops_data.set_index("cell_id", inplace=True)
@@ -156,6 +149,7 @@ def visualize_flow_for_chain(
 
     n = int(np.sqrt(len(cumulative_inflow)))  # Assuming the grid is square
     cumulative_inflow_matrix = np.array(cumulative_inflow).reshape((n, n))
+    max_inflow_value = np.max(cumulative_inflow_matrix)
 
     # Plot the heatmap
     fig, ax = plt.subplots(figsize=(10, 10))
@@ -174,6 +168,8 @@ def visualize_flow_for_chain(
         linewidths=0.2,
         linecolor="gray",
         ax=ax,
+        vmin=0,  # Minimum value for color bar
+        vmax=max_inflow_value,  # Maximum value for color bar
     )
 
     ax.set_title(f"Flows from stores of {selected_chain_name}")
@@ -187,7 +183,7 @@ def visualize_flow_for_chain(
     ax.set_yticklabels(np.round(np.linspace(0, 1, 6), 1))
     ax.tick_params(axis="both", which="major", labelsize=6, colors="darkgray")
 
-    max_value = np.round(np.max(cumulative_inflow_matrix), 1)
+    max_value = np.round(max_inflow_value, 1)
     intermediate_ticks = [np.round(max_value * x, 1) for x in [0.25, 0.5, 0.75]]
 
     cbar = plt.colorbar(ax.collections[0], ax=ax)
@@ -200,9 +196,7 @@ def visualize_flow_for_chain(
     investigation_scenario = int(investigation_scenario)
 
     # Save the plot
-    directory_path = (
-        f"../Traceback_Model/Data/Results/Scenario_{investigation_scenario}"
-    )
+    directory_path = f"../Traceback_Model/Results/Scenario_{investigation_scenario}"
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
 

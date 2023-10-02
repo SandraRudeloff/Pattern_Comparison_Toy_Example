@@ -5,7 +5,7 @@ options(digits = 4)
 
 investigation_scenarios <- 1:17
 no_of_cells <- 100
-delta <- 0.05 # half the side length of one square
+half_side_length <- 0.05 # half the side length of one square
 
 traceback_results_df <- data.frame(
   scenario_id = character(),
@@ -31,10 +31,10 @@ flow_results_df <- data.frame(
 
 for (scenario in investigation_scenarios) {
   print(scenario)
-  current_results <- analyze_scenario(scenario, no_of_cells, delta)
+  current_results <- analyze_scenario(scenario, no_of_cells, half_side_length)
   traceback_results_df <- rbind(traceback_results_df, current_results$traceback_results)
   flow_results_df <- rbind(flow_results_df, current_results$flow_results)
 }
 
 results_list <- list("traceback results" = traceback_results_df, "flow results" = flow_results_df)
-write_xlsx(results_list, "Data/Results/results.xlsx")
+write_xlsx(results_list, "Results/results.xlsx")

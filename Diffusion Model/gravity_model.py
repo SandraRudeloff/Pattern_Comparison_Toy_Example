@@ -92,10 +92,16 @@ def hyman_model(
     Returns:
         flow(numpy.ndarray): _description_
     """
-    shops_data.set_index("cell_id", inplace=True)
+    # For shops_data
+    if "cell_id" in shops_data.columns:
+        shops_data.set_index("cell_id", inplace=True)
     shops_data.index = shops_data.index.astype(int)
-    population_data.set_index("cell_id", inplace=True)
+
+    # For population_data
+    if "cell_id" in population_data.columns:
+        population_data.set_index("cell_id", inplace=True)
     population_data.index = population_data.index.astype(int)
+
 
     beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
