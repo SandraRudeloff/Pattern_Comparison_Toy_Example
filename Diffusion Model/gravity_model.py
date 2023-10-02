@@ -6,6 +6,15 @@ from ipfn import ipfn
 from scipy.spatial import distance_matrix
 
 
+def sanity_check(data, description):
+    if np.isnan(data).any():
+        raise ValueError(f"NaN values found in {description}.")
+    if np.isinf(data).any():
+        raise ValueError(f"Infinity values found in {description}.")
+    if (data < 0).any():
+        raise ValueError(f"Negative values found in {description}.")
+
+
 def get_distance_matrix(production, consumption):
     production_centroids = pd.concat(
         [production.x_centroid, production.y_centroid], axis=1
@@ -14,27 +23,27 @@ def get_distance_matrix(production, consumption):
         [consumption.x_centroid, consumption.y_centroid], axis=1
     )
 
-    arr_distance = distance_matrix(
-        production_centroids,
-        consumption_centroids,
-    )
+    arr_distance = distance_matrix(production_centroids, consumption_centroids,)
     # in-cell distance shouldn't be zero and is set according to Czuber (1884)
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 0.05
+
+    sanity_check(arr_distance, "distance matrix")
 
     return arr_distance
 
 
 def get_production_potential(shops_data):
     production_potential = shops_data.groupby("cell_id").agg(
-        stores_count=("sales", "count"),
-        production_potential=("sales", "sum"),
+        stores_count=("sales", "count"), production_potential=("sales", "sum"),
     )
-
+    sanity_check(production_potential.production_potential, "production potential")
     return production_potential
 
 
 def get_consumption_potential(population_data, total_revenue):
     total_population = population_data["population"].sum()
+    if total_population == 0:
+        raise ValueError("Total population cannot be zero.")
     consumption_potential = population_data.copy()
     consumption_potential["consumption_potential"] = (
         consumption_potential["population"].divide(total_population)
@@ -42,6 +51,7 @@ def get_consumption_potential(population_data, total_revenue):
     consumption_potential = consumption_potential[
         consumption_potential["population"] != 0
     ]
+    sanity_check(consumption_potential.consumption_potential, "consumption potential")
     return consumption_potential
 
 
@@ -72,9 +82,7 @@ def get_weighted_dist(flow_matrix, dist_matrix):
 
 def add_indices(flow, production_potential, consumption_potential):
     df_flow = pd.DataFrame(
-        flow,
-        columns=consumption_potential.index,
-        index=production_potential.index,
+        flow, columns=consumption_potential.index, index=production_potential.index,
     )
     return df_flow
 
@@ -101,7 +109,6 @@ def hyman_model(
     if "cell_id" in population_data.columns:
         population_data.set_index("cell_id", inplace=True)
     population_data.index = population_data.index.astype(int)
-
 
     beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
@@ -232,6 +239,18 @@ def hyman_model(
         % (tol_best.index(min(tol_best)), tol_best[tol_best.index(min(tol_best))])
     )
     print("Beta is " + str(beta_best))
+
+    sanity_check(flow, "flow matrix")
+    if not np.allclose(
+        flow.sum(axis=1), production_potential.production_potential.to_numpy(), atol=2,
+    ):
+        raise ValueError("Row sums do not match production potential.")
+    if not np.allclose(
+        flow.sum(axis=0),
+        consumption_potential.consumption_potential.to_numpy(),
+        atol=2,
+    ):
+        raise ValueError("Column sums do not match consumption potential.")
 
     flow_end = add_indices(flow, production_potential, consumption_potential)
 
