@@ -208,7 +208,6 @@ plot_stores <- function(field, df_shops, investigation_scenario) {
 # Function to adjust coordinates if they lie on the grid
 # Function to adjust coordinates if they lie on the grid
 adjust_coordinates <- function(coord) {
-  
   # Define a small tolerance value for numerical comparisons
   tolerance <- 1e-9
   
@@ -216,12 +215,12 @@ adjust_coordinates <- function(coord) {
   y <- coord[2]
   
   # Check if x is "close enough" to being divisible by 0.1
-  if (abs(x %% 0.1) < tolerance) {
+  if (((x *10)%% 1) < tolerance) {
     x <- x + runif(1, -1e-5, 1e-5)
   }
   
   # Check if y is "close enough" to being divisible by 0.1
-  if (abs(y %% 0.1) < tolerance) {
+  if (((y *10) %% 1) < tolerance) {
     y <- y + runif(1, -1e-5, 1e-5)
   }
   
