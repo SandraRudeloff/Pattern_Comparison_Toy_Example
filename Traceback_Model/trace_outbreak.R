@@ -497,7 +497,7 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, half_side_leng
     tolerance_best = numeric(),
     stringsAsFactors = FALSE # tells R not to convert character vectors to factors when creating a data frame
   )
-  # Collect Variables ----
+  ## Collect Variables ----
   # All values are measured in km.
   scenario_data <- get_scenario_data(investigation_scenario, no_of_cells)
   df_population <- scenario_data$df_population
@@ -507,6 +507,7 @@ analyze_scenario <- function(investigation_scenario, no_of_cells, half_side_leng
   list_outbreak_data <- scenario_data$list_outbreak_data
   outbreak_list <- list_outbreak_data$outbreak_list
 
+  ## Optimize -----
   # set boundaries for optimization
   lower_bounds <- c(alpha = 0.001, beta = 0.0001)
   upper_bounds <- c(alpha = 5000, beta = 50)
