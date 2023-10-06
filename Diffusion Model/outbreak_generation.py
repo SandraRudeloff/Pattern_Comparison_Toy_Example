@@ -1,10 +1,10 @@
 import os
 import random
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 from gravity_model import get_production_potential
 
