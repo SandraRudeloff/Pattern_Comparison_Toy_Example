@@ -16,8 +16,8 @@ source_python("../Diffusion Model/outbreak_generation.py")
 
 set.seed(123)
 
-path_to_scenarios = "./Input_Data/scenarios_to_test_code.xlsx"
-path_to_write_results = "Results/scenarios_to_test_code/"
+path_to_scenarios = "./Input_Data/scenarios.xlsx"
+path_to_write_results = "Results/"
 
 # Helper functions ----
 # function to check if a point is within a square centered at (x, y) with side length 2*half_side_length
@@ -129,9 +129,7 @@ get_outbreaks <- function(investigation_scenario, df_shops, df_population) {
   flow <- list_hyman_results[[1]]
   beta_best <- list_hyman_results[[2]]
   tolerance_best <- list_hyman_results[[3]]
-
   flow_py <- r_to_py(flow)
-
   ### Generate Outbreaks for Scenario
   outbreak_list <- list()
 

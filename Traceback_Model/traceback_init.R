@@ -3,8 +3,8 @@ source("trace_outbreak.R")
 options(warn = 2)
 options(digits = 15)
 
-path_to_write_results = "Results/scenarios_to_test_code/"
-investigation_scenarios <- 15:16
+path_to_write_results = "Results/"
+investigation_scenarios <- 1:9
 
 no_of_cells <- 100
 half_side_length <- 0.05 # half the side length of one square cell

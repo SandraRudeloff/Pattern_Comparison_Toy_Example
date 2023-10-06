@@ -134,6 +134,7 @@ def generate_outbreak(
 def visualize_flow_for_chain(
     investigation_scenario, selected_chain_name, df_shops, total_flow
 ):
+    selected_chain_name = str(selected_chain_name)
     if df_shops.index.name != "cell_id":
         df_shops.set_index("cell_id", inplace=True)
 
