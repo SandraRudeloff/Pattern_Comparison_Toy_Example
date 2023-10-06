@@ -52,11 +52,29 @@ get_shops <- function(investigation_scenario, no_of_cells, df_population) {
   chain_details <- subset(read_excel(path_to_scenarios, sheet = "Chain_Details"), scenario_id == investigation_scenario)
   df_shops <- data.frame()
 
-  unique_chains <- unique(chain_details$chain_id)
+  unique_chains <- unique(unlist(sapply(1:2, function(x) chain_details[[paste0("Chain_", x, "_chain_id")]]))) 
+    
   # loop through each chain and generate shops
   for (current_chain in unique_chains) {
-    chain_data <- chain_details %>%
-      filter(chain_id == current_chain)
+    if (is.na(current_chain)) {
+      next
+    }
+    
+    if (current_chain != unique_chains[1] && chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_spatial_distribution")]] == "clustered") {
+      radius_value <- chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_radius")]]
+    }
+    else {
+      radius_value <- NA
+    }
+    
+    chain_data <- data.frame(
+      chain_id = current_chain,
+      num_stores = chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_num_stores")]],
+      spatial_distribution = chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_spatial_distribution")]],
+      sales_distribution = chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_sales_distribution")]],
+      total_sales = chain_details[[paste0("Chain_", which(unique_chains == current_chain), "_total_sales")]],
+      radius = radius_value
+    )
 
     is_first_chain <- (current_chain == unique_chains[1])
 
