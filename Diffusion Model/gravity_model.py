@@ -141,6 +141,9 @@ def hyman_model(
         <= tolerance
     ):
         flow = flow_0
+        modeled_mean_current = get_weighted_dist(flow, dist_matrix)
+        modeled_means_list.append(modeled_mean_current)
+        
     while (
         abs(empirical_mean_shopping_distance - modeled_means_list[count_loops])
         > tolerance
