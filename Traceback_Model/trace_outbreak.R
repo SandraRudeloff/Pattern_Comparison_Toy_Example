@@ -311,7 +311,7 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
       )
     )
   )
-  html_file <- paste0(path_to_write_results ,"Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".html")
+  html_file <- paste0(path_to_write_results ,"Scenario_",  investigation_scenario, "/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".html")
   save_html(html, file = html_file)
 }
 
