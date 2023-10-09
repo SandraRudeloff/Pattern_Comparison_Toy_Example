@@ -4,7 +4,7 @@ options(warn = 2)
 options(digits = 15)
 
 path_to_write_results = "Results/"
-investigation_scenarios <- 1:9
+investigation_scenarios <-163:320
 
 no_of_cells <- 100
 half_side_length <- 0.05 # half the side length of one square cell
