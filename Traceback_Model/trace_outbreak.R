@@ -446,7 +446,7 @@ run_outbreak_analysis <- function(investigation_scenario, outbreak_name, df_outb
     #-likelihood_function_minimize(c(result_alternative_DEoptim$optim$bestmem[1], result_alternative_DEoptim$optim$bestmem[2]), y = y, N = N, df_population = df_population, df_shops = chain_shops)
 
     # Determine the degrees of freedom (difference in number of parameters between the two models)
-    df <- 2 # alpha and beta are the additional parameters in the alternative model
+    df <- 1 # alpha and beta are the additional parameters in the alternative model, but there is one effective degree of freedom
 
     p_value <- 1 - pchisq(GLRT_statistic, df)
 

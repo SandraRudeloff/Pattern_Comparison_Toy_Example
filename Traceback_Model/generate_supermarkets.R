@@ -197,12 +197,11 @@ plot_stores <- function(field, df_shops, investigation_scenario) {
 
   table_grob_shops <- tableGrob(df_shops[, c("chain", "x", "y", "sales")], rows = NULL)
   
-  grid.arrange(
+  plot_and_table <- grid.arrange(
     p_main,
     table_grob_shops,
     ncol = 2
   )
-  
 }
 
 # Function to adjust coordinates if they lie on the grid
