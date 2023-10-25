@@ -249,9 +249,18 @@ visualize_scenario <- function(investigation_scenario, df_shops, df_population, 
 
   top_row <- arrangeGrob(p_main, p_legend, ncol = 2, widths = c(4.2, 0.8))
 
-  temp_plot <- tempfile(fileext = ".png")
-  ggsave(temp_plot, plot = top_row, width = 5, height = 4)
-  plot_tag <- tags$img(src = temp_plot)
+  # Define the file name and path
+  file_name <- paste0(path_to_write_results, "Scenario_", investigation_scenario, "/Scenario_", investigation_scenario, "_Outbreak_", outbreak_name, ".png")
+  
+  # Save the plot
+  ggsave(file_name, plot = top_row, width = 4.5, height = 3.5)
+ 
+   # Read the png file and convert it to a base64 string
+  img_data <- base64enc::base64encode(file_name)
+  
+  # Embed in HTML
+  plot_tag <- tags$img(src = paste0("data:image/png;base64,", img_data))
+  
 
   div_shops <- tags$div(
     id = "shopsDiv",
