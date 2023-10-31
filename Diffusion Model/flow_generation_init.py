@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import pandas as pd
 
 from gravity_model import hyman_model
@@ -14,7 +13,6 @@ population_data = {
 
 # Create the DataFrame
 df_population = pd.DataFrame(population_data)
-
 
 # Create the data
 shops_data = {
